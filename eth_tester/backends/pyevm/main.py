@@ -462,16 +462,6 @@ class PyEVMBackend(BaseChainBackend):
         header = self.chain.get_block().header
         return header.gas_limit - header.gas_used
 
-    @replace_exceptions({
-        EVMInvalidInstruction: TransactionFailed,
-        EVMRevert: TransactionFailed})
-    def estimate_gas(self, transaction):
-        evm_transaction = self._get_normalized_and_unsigned_evm_transaction(assoc(
-            transaction, 'gas', 21000))
-        spoofed_transaction = EVMSpoofTransaction(evm_transaction, from_=transaction['from'])
-
-        return self.chain.estimate_gas(spoofed_transaction)
-
     def is_eip838_error(self, error):
         if not isinstance(error, EVMRevert):
             return False
@@ -482,6 +472,27 @@ class PyEVMBackend(BaseChainBackend):
             return error.args[0][:4] == EIP838_SIG
         except TypeError:
             return False
+
+    @replace_exceptions({
+        EVMInvalidInstruction: TransactionFailed,
+        EVMRevert: TransactionFailed,
+    })
+    def estimate_gas(self, transaction):
+        evm_transaction = self._get_normalized_and_unsigned_evm_transaction(assoc(
+            transaction, 'gas', 21000))
+        spoofed_transaction = EVMSpoofTransaction(evm_transaction, from_=transaction['from'])
+
+        try:
+            return self.chain.estimate_gas(spoofed_transaction)
+        except EVMRevert as err:
+            if self.is_eip838_error(err):
+                error_str = err.args[0][36:]
+                try:
+                    msg = decode_single('string', error_str)
+                except DecodingError:
+                    # Invalid encoded bytes, leave msg as computation._error
+                    # byte string.
+                    pass
 
     def call(self, transaction, block_number="latest"):
         # TODO: move this to the VM level.
