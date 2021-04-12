@@ -98,14 +98,6 @@ Or on OSX:
 brew install pandoc
 ```
 
-To release a new version:
-
-```sh
-bumpversion $$VERSION_PART_TO_BUMP$$
-git push && git push --tags
-make release
-```
-
 
 #### How to bumpversion
 
@@ -119,6 +111,19 @@ If you are in a beta version, `bumpversion stage` will switch to a stable.
 
 To issue an unstable version when the current version is stable, specify the
 new version explicitly, like `bumpversion --new-version 4.0.0-alpha.1 devnum`
+
+
+To release a new version:
+
+```sh
+make release bump={version type}
+```
+
+For example:
+
+```sh
+make release bump=minor
+```
 
 
 # Documentation
@@ -193,7 +198,7 @@ The chain can only time travel forward in time.
 #### `EthereumTester.time_travel(timestamp)`
 
 The `timestamp` must be an integer, strictly greater than the current timestamp
-of the latest block.  
+of the latest block.
 
 > Note: Time traveling will result in a new block being mined.
 
@@ -308,7 +313,7 @@ seconds.
 
 #### `EthereumTester.lock_account(account)`
 
-Locks the provide account.  
+Locks the provide account.
 
 Raises a `ValidationError` if:
 
@@ -481,7 +486,7 @@ found for the given hash.
  'transaction_index': 0}
 ```
 
-- Receipts for unmined transactions will have all of `block_hash`, `block_number` and `transaction_index` set to `None`.  
+- Receipts for unmined transactions will have all of `block_hash`, `block_number` and `transaction_index` set to `None`.
 - Receipts for transactions which create a contract will have the created contract address in the `contract_address` field.
 
 
@@ -584,7 +589,7 @@ can be used to retrieve the transaction hashes for the pending transactions.
 #### `EthereumTester.create_log_filter(from_block=None, to_block=None, address=None, topics=None) -> integer`
 
 Creates a new filter for logs produced by transactions.  The parameters for
-this function can be used to filter the log entries.  
+this function can be used to filter the log entries.
 
 ```python
 >>> filter_id = t.create_log_filter()
@@ -819,9 +824,9 @@ Then pass the generated `custom_genesis_params` `dict` to the backend's `__init_
 
 Overriding genesis state is similar to overriding genesis state, but requires the consideration of test accounts.
 To override the genesis state of accounts, pass a `state_overrides` `dict` to `PyEVM.generate_genesis_state`,
-and optionally, the number of accounts to create.  
+and optionally, the number of accounts to create.
 
-*NOTE: The same state is applied to all generated test accounts.* 
+*NOTE: The same state is applied to all generated test accounts.*
 
 ```
 # Default Account Genesis State
@@ -834,7 +839,7 @@ default_account_state = {
 }
 ```
 
-For Example, to create 3 test accounts, each with a balance of 100 ETH each: 
+For Example, to create 3 test accounts, each with a balance of 100 ETH each:
 
 ```python
 >>> from eth_tester import EthereumTester, PyEVMBackend
@@ -853,14 +858,14 @@ For Example, to create 3 test accounts, each with a balance of 100 ETH each:
 ### Implementing Custom Backends
 
 The base class `eth_tester.backends.base.BaseChainBackend` is the recommended
-base class to begin with if you wish to write your own backend.  
+base class to begin with if you wish to write your own backend.
 
 Details on implementation are beyond the scope of this document.
 
 
 ## Data Formats
 
-Ethereum tester uses two formats for data.  
+Ethereum tester uses two formats for data.
 
 * The *normal* format is the data format the is expected as input arguments to all `EthereumTester` methods as well as the return types from all method calls.
 * The *canonical* format is the data format that is used internally by the backend class.
