@@ -4,6 +4,7 @@ from typing import (
 )
 
 from eth_utils import (
+    is_hexstr,
     to_bytes,
     to_int,
 )
@@ -20,3 +21,9 @@ def from_hexstr(
     elif to_type == "bytes":
         return to_bytes(hexstr=v)
     raise ValueError(f"Invalid type: {type}. Must be 'int' or 'bytes'.")
+
+
+def normalize_block_id(v: str) -> Union[int, str]:
+    if is_hexstr(v):
+        return int(v, 16)
+    return v

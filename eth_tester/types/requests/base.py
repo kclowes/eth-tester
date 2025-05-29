@@ -1,3 +1,6 @@
+from abc import (
+    abstractmethod,
+)
 from contextvars import (
     ContextVar,
 )
@@ -102,21 +105,17 @@ class RequestType:
         return config
 
     @classmethod
+    @abstractmethod
     def _get_serializer_for_current_backend(
         cls, backend: BackendContext
     ) -> Callable[[Any], Any]:
-        """Get the appropriate serializer for this type and backend."""
-        # default to ``to_hex`` for serialization
-        return to_hex
+        raise NotImplementedError("This method must be implemented in subclasses.")
 
     @classmethod
     def _fill_model(cls, v: Any) -> Any:
-        if cls.validator:
-            cls.validator(v)
+        cls.validator(v)
         if cls.normalizer:
             v = cls.normalizer(v)
-        if cls.strict_length and len(v) != cls.strict_length:
-            raise ValueError(f"Value must have length `{cls.strict_length}`, got `{v}`")
         return v
 
     @classmethod
@@ -138,8 +137,8 @@ class RequestType:
             ),
         )
 
-    @staticmethod
-    def validator(v: Any) -> None:
+    @classmethod
+    def validator(cls, v: Any) -> None:
         if not is_hexstr(v):
             raise ValueError(f"Value must be a hex string, got `{v}`")
 
@@ -172,3 +171,10 @@ class RequestHexBytes(bytes, RequestType):
 
 class RequestHexStr(str, RequestType):
     _schema = core_schema.str_schema()
+
+    @classmethod
+    def _get_serializer_for_current_backend(
+        cls, backend: BackendContext
+    ) -> Callable[[str], Any]:
+        # always convert to hex strings
+        return lambda v: to_hex(hexstr=v)

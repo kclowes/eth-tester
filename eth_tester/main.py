@@ -10,7 +10,6 @@ from typing import (
 )
 
 from eth_typing import (
-    HexAddress,
     HexStr,
 )
 from eth_utils import (
@@ -47,10 +46,17 @@ from eth_tester.exceptions import (
 )
 from eth_tester.types.requests.base import (
     RequestHexBytes,
+    RequestHexStr,
+)
+from eth_tester.types.requests.blocks import (
+    RequestBlockIdentifier,
 )
 from eth_tester.types.requests.transactions import (
     SignedTypedTransaction,
     TransactionRequestObject,
+)
+from eth_tester.types.responses.base import (
+    ResponseHexStr,
 )
 from eth_tester.utils.accounts import (
     private_key_to_address,
@@ -235,30 +241,22 @@ class EthereumTester:
 
         self._account_unlock[raw_account] = False
 
-    def get_balance(self, account, block_number="pending"):
-        self.validator.validate_inbound_account(account)
-        self.validator.validate_inbound_block_number(block_number)
-        raw_account = self.normalizer.normalize_inbound_account(account)
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_balance = self.backend.get_balance(raw_account, raw_block_number)
-        self.validator.validate_outbound_balance(raw_balance)
-        balance = self.normalizer.normalize_outbound_balance(raw_balance)
-        return balance
+    @validate_call(validate_return=True)
+    def get_balance(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "pending"
+    ) -> ResponseHexStr:
+        return self.backend.get_balance(address, block_number)
 
-    def get_code(self, account, block_number="pending"):
-        self.validator.validate_inbound_account(account)
-        self.validator.validate_inbound_block_number(block_number)
-        raw_account = self.normalizer.normalize_inbound_account(account)
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_code = self.backend.get_code(raw_account, raw_block_number)
-        self.validator.validate_outbound_code(raw_code)
-        code = self.normalizer.normalize_outbound_code(raw_code)
-        return code
+    @validate_call(validate_return=True)
+    def get_code(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "pending"
+    ) -> ResponseHexStr:
+        return self.backend.get_code(address, block_number)
 
     def get_storage_at(
         self,
-        account: HexAddress,
-        slot: HexStr,
+        account: RequestHexStr,
+        slot: RequestHexBytes,
         # properly type hint once eth-typing brings in updated `BlockIdentifier`
         block_number="pending",
     ) -> HexStr:
@@ -472,7 +470,8 @@ class EthereumTester:
             filter_.add(raw_transaction_hash)
 
     @handle_auto_mining
-    def send_raw_transaction(self, raw_transaction_hex):
+    @validate_call
+    def send_raw_transaction(self, raw_transaction_hex: RequestHexBytes):
         self.validator.validate_inbound_raw_transaction(raw_transaction_hex)
         raw_transaction = self.normalizer.normalize_inbound_raw_transaction(
             raw_transaction_hex

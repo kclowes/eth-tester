@@ -18,14 +18,12 @@ from eth_account.typed_transactions import (
 from eth_keys import (
     KeyAPI,
 )
-from eth_typing import (
-    Address,
-)
 from eth_utils import (
     ValidationError as EthUtilsValidationError,
     encode_hex,
     is_integer,
     to_bytes,
+    to_canonical_address,
     to_checksum_address,
     to_dict,
     to_tuple,
@@ -64,7 +62,12 @@ from eth_tester.utils.casing import (
 
 from ...types.requests.base import (
     BackendContext,
+    RequestHexInteger,
+    RequestHexStr,
     current_backend,
+)
+from ...types.requests.blocks import (
+    RequestBlockIdentifier,
 )
 from ...utils.accounts import (
     get_account_keys_from_mnemonic,
@@ -612,17 +615,26 @@ class PyEVMBackend(BaseChainBackend):
         vm = _get_vm_for_block_number(self.chain, block_number)
         return vm.state.get_nonce(account)
 
-    def get_balance(self, account, block_number="latest"):
+    def get_balance(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
+    ):
         vm = _get_vm_for_block_number(self.chain, block_number)
-        return vm.state.get_balance(account)
+        return vm.state.get_balance(to_canonical_address(address))
 
-    def get_code(self, account, block_number="latest"):
+    def get_code(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
+    ):
         vm = _get_vm_for_block_number(self.chain, block_number)
-        return vm.state.get_code(account)
+        return vm.state.get_code(to_canonical_address(address))
 
-    def get_storage(self, account: Address, slot: int, block_number="latest") -> int:
+    def get_storage(
+        self,
+        address: RequestHexStr,
+        slot: RequestHexInteger,
+        block_number: RequestBlockIdentifier = "latest",
+    ) -> int:
         vm = _get_vm_for_block_number(self.chain, block_number)
-        return vm.state.get_storage(account, slot)
+        return vm.state.get_storage(to_canonical_address(address), slot)
 
     def get_base_fee(self, block_number="latest"):
         vm = _get_vm_for_block_number(self.chain, block_number)
@@ -710,7 +722,7 @@ class PyEVMBackend(BaseChainBackend):
     def _create_type_aware_unsigned_transaction(self, normalized_txn):
         if all(_ in normalized_txn for _ in ("accessList", "gasPrice")):
             return self.chain.get_transaction_builder().new_unsigned_access_list_transaction(  # noqa: E501
-                **dict_keys_to_snake_case(normalized_txn)
+                **normalized_txn.serialize()
             )
         elif all(_ in normalized_txn for _ in DYNAMIC_FEE_TRANSACTION_PARAMS):
             test = self.chain.get_transaction_builder()
