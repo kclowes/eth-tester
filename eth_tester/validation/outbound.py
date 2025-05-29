@@ -1,4 +1,6 @@
-from typing import Optional
+from typing import (
+    Optional,
+)
 
 from eth_utils import (
     is_canonical_address,
@@ -36,8 +38,6 @@ from .common import (
     validate_dict,
     validate_positive_integer,
     validate_transaction_type,
-    validate_uint64,
-    validate_uint256,
 )
 
 

@@ -220,9 +220,7 @@ def serialize_eels_transaction_for_block(
         tx, backend_instance._transactions_module.LegacyTransaction
     ):
         json_tx["type"] = "0x00"
-    elif isinstance(
-        tx, backend_instance._transactions_module.AccessListTransaction
-    ):
+    elif isinstance(tx, backend_instance._transactions_module.AccessListTransaction):
         json_tx["type"] = "0x01"
     elif isinstance(tx, backend_instance._transactions_module.FeeMarketTransaction):
         json_tx["type"] = "0x02"

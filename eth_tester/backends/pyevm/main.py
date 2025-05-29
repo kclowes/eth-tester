@@ -62,6 +62,10 @@ from eth_tester.utils.casing import (
     dict_keys_to_snake_case,
 )
 
+from ...types.requests.base import (
+    BackendContext,
+    current_backend,
+)
 from ...utils.accounts import (
     get_account_keys_from_mnemonic,
     get_default_account_keys,
@@ -374,6 +378,9 @@ class PyEVMBackend(BaseChainBackend):
             mnemonic,
             hd_path,
         )
+
+        # set the context to PyEVM
+        current_backend.set(BackendContext.PyEVM)
 
     @classmethod
     def from_mnemonic(
@@ -688,7 +695,6 @@ class PyEVMBackend(BaseChainBackend):
     def _get_normalized_and_signed_evm_transaction(
         self, transaction, block_number="latest"
     ):
-        import pdb; pdb.set_trace()
         if transaction["from"] not in self._key_lookup:
             raise ValidationError(
                 'No valid "from" key was provided in the transaction '

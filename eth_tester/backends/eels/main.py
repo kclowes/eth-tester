@@ -33,6 +33,10 @@ from eth_utils import (
     to_wei,
 )
 
+from ...types.requests.base import (
+    BackendContext,
+    current_backend,
+)
 from .utils import (
     eels_is_available,
 )
@@ -205,6 +209,9 @@ class EELSBackend(BaseChainBackend):
             hd_path=hd_path,
         )
         self._debug_mode = debug_mode
+
+        # set the context to EELS
+        current_backend.set(BackendContext.EELS)
 
     @property
     def _pending_block(self):
@@ -1091,9 +1098,7 @@ class EELSBackend(BaseChainBackend):
                 self,
                 raw_transaction,
             )
-            eels_transaction = self._transactions_module.BlobTransaction(
-                **tx_dict
-            )
+            eels_transaction = self._transactions_module.BlobTransaction(**tx_dict)
         else:
             try:
                 eels_transaction = self.fork.decode_transaction(raw_transaction)

@@ -9,13 +9,6 @@ from typing import (
     Optional,
 )
 
-from pydantic import validate_call
-
-from eth_tester.types.requests.base import RequestHexBytes, RequestHexStr
-from eth_tester.types.requests.transactions import (
-    BlobTransaction, SignedTypedTransaction, TransactionRequestObject,
-)
-from eth_tester.validation.outbound import validate_hexstr
 from eth_typing import (
     HexAddress,
     HexStr,
@@ -34,6 +27,9 @@ from eth_utils.toolz import (
     partial,
     remove,
 )
+from pydantic import (
+    validate_call,
+)
 
 from eth_tester.backends import (
     get_chain_backend,
@@ -49,6 +45,13 @@ from eth_tester.exceptions import (
     TransactionNotFound,
     ValidationError,
 )
+from eth_tester.types.requests.base import (
+    RequestHexBytes,
+)
+from eth_tester.types.requests.transactions import (
+    SignedTypedTransaction,
+    TransactionRequestObject,
+)
 from eth_tester.utils.accounts import (
     private_key_to_address,
 )
@@ -61,8 +64,8 @@ from eth_tester.utils.transactions import (
     extract_valid_transaction_params,
     remove_matching_transaction_from_list,
 )
-from eth_tester.validation import (
-    get_validator,
+from eth_tester.validation.outbound import (
+    validate_hexstr,
 )
 
 

@@ -1,8 +1,10 @@
-from typing import Literal, Union
+from typing import (
+    Literal,
+    Union,
+)
 
 from eth_utils import (
     to_bytes,
-    to_hex,
     to_int,
 )
 

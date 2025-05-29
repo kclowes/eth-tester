@@ -1,16 +1,31 @@
-from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
+from typing import (
+    Annotated,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
-from pydantic import Discriminator, Field, Tag
-from pydantic_core import core_schema
+from pydantic import (
+    Discriminator,
+    Field,
+    Tag,
+)
+from pydantic_core import (
+    core_schema,
+)
 
 from eth_tester.types.requests.base import (
     RequestHexBytes,
     RequestHexInteger,
-    RequestType,
     RequestModel,
+    RequestType,
 )
-from eth_tester.validation.inbound import validate_account_access
-from eth_utils import CamelModel
+from eth_tester.validation.inbound import (
+    validate_account_access,
+)
 
 
 class RequestAccountAccessRequest(RequestType):
@@ -96,9 +111,7 @@ class AccessListTransaction(BaseTransactionRequestModel):
     type: RequestHexInteger = Field(exclude=True, default="0x1")
 
 
-class SignedAccessListTransaction(
-    SignedTypedTransaction, AccessListTransaction
-):
+class SignedAccessListTransaction(SignedTypedTransaction, AccessListTransaction):
     """Signed EIP-2930 access list transaction type."""
 
 
@@ -112,9 +125,7 @@ class DynamicFeeTransaction(BaseTransactionRequestModel):
     type: RequestHexInteger = Field(exclude=True, default="0x2")
 
 
-class SignedDynamicFeeTransaction(
-    SignedTypedTransaction, DynamicFeeTransaction
-):
+class SignedDynamicFeeTransaction(SignedTypedTransaction, DynamicFeeTransaction):
     """Signed EIP-1559 dynamic fee transaction type."""
 
 
@@ -130,9 +141,7 @@ class BlobTransaction(BaseTransactionRequestModel):
     type: RequestHexInteger = Field(exclude=True, default="0x3")
 
 
-class SignedBlobTransaction(
-    SignedTypedTransaction, BlobTransaction
-):
+class SignedBlobTransaction(SignedTypedTransaction, BlobTransaction):
     """Signed EIP-4844 blob transaction type."""
 
 
@@ -147,13 +156,12 @@ class SetCodeTransaction(BaseTransactionRequestModel):
     type: RequestHexInteger = Field(exclude=True, default="0x4")
 
 
-class SignedSetCodeTransaction(
-    SignedTypedTransaction, SetCodeTransaction
-):
+class SignedSetCodeTransaction(SignedTypedTransaction, SetCodeTransaction):
     """Signed EIP-7702 set code transaction type."""
 
 
 # -- generic transaction discriminator -- #
+
 
 def transaction_discriminator(v: Dict[str, Any]) -> str:
     """Discriminate transaction type based on present fields."""
