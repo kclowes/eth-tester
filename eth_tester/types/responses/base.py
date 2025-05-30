@@ -5,14 +5,9 @@ from typing import (
 from eth_utils import (
     to_hex,
 )
-from pydantic import (
-    RootModel,
-)
 from pydantic_core import (
     core_schema,
 )
-
-RootModel
 
 
 # -- base types -- #

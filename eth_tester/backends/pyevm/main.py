@@ -608,22 +608,22 @@ class PyEVMBackend(BaseChainBackend):
             "reward": reward,
         }
 
-    #
-    # Account state
-    #
-    def get_nonce(self, account, block_number="latest"):
+    # --- account state --- @
+    def get_nonce(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> int:
         vm = _get_vm_for_block_number(self.chain, block_number)
-        return vm.state.get_nonce(account)
+        return vm.state.get_nonce(to_canonical_address(address))
 
     def get_balance(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
-    ):
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> int:
         vm = _get_vm_for_block_number(self.chain, block_number)
         return vm.state.get_balance(to_canonical_address(address))
 
     def get_code(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
-    ):
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> bytes:
         vm = _get_vm_for_block_number(self.chain, block_number)
         return vm.state.get_code(to_canonical_address(address))
 
@@ -631,12 +631,12 @@ class PyEVMBackend(BaseChainBackend):
         self,
         address: RequestHexStr,
         slot: RequestHexInteger,
-        block_number: RequestBlockIdentifier = "latest",
+        block_number: RequestBlockIdentifier,
     ) -> int:
         vm = _get_vm_for_block_number(self.chain, block_number)
         return vm.state.get_storage(to_canonical_address(address), slot)
 
-    def get_base_fee(self, block_number="latest"):
+    def get_base_fee(self, block_number: RequestBlockIdentifier) -> int:
         vm = _get_vm_for_block_number(self.chain, block_number)
         return vm.state.base_fee
 

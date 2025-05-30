@@ -9,9 +9,6 @@ from typing import (
     Optional,
 )
 
-from eth_typing import (
-    HexStr,
-)
 from eth_utils import (
     is_integer,
     is_same_address,
@@ -46,6 +43,7 @@ from eth_tester.exceptions import (
 )
 from eth_tester.types.requests.base import (
     RequestHexBytes,
+    RequestHexInteger,
     RequestHexStr,
 )
 from eth_tester.types.requests.blocks import (
@@ -253,33 +251,20 @@ class EthereumTester:
     ) -> ResponseHexStr:
         return self.backend.get_code(address, block_number)
 
+    @validate_call(validate_return=True)
     def get_storage_at(
         self,
-        account: RequestHexStr,
-        slot: RequestHexBytes,
-        # properly type hint once eth-typing brings in updated `BlockIdentifier`
-        block_number="pending",
-    ) -> HexStr:
-        self.validator.validate_inbound_account(account)
-        self.validator.validate_inbound_storage_slot(slot)
-        self.validator.validate_inbound_block_number(block_number)
-        raw_account = self.normalizer.normalize_inbound_account(account)
-        raw_slot = self.normalizer.normalize_inbound_storage_slot(slot)
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_storage = self.backend.get_storage(raw_account, raw_slot, raw_block_number)
-        self.validator.validate_outbound_storage(raw_storage)
-        storage = self.normalizer.normalize_outbound_storage(raw_storage)
-        return storage
+        address: RequestHexStr,
+        slot: RequestHexInteger,
+        block_number: RequestBlockIdentifier = "pending",
+    ) -> ResponseHexStr:
+        return self.backend.get_storage(address, slot, block_number)
 
-    def get_nonce(self, account, block_number="pending"):
-        self.validator.validate_inbound_account(account)
-        self.validator.validate_inbound_block_number(block_number)
-        raw_account = self.normalizer.normalize_inbound_account(account)
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_nonce = self.backend.get_nonce(raw_account, raw_block_number)
-        self.validator.validate_outbound_nonce(raw_nonce)
-        nonce = self.normalizer.normalize_outbound_nonce(raw_nonce)
-        return nonce
+    @validate_call(validate_return=True)
+    def get_nonce(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "pending"
+    ) -> ResponseHexStr:
+        return self.backend.get_nonce(address, block_number)
 
     #
     # Blocks, Transactions, Receipts

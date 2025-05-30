@@ -35,7 +35,11 @@ from eth_utils import (
 
 from ...types.requests.base import (
     BackendContext,
+    RequestHexStr,
     current_backend,
+)
+from ...types.requests.blocks import (
+    RequestBlockIdentifier,
 )
 from .utils import (
     eels_is_available,
@@ -783,27 +787,33 @@ class EELSBackend(BaseChainBackend):
     #
     # Account state
     #
-    def get_nonce(self, account, block_number="pending"):
+    def get_nonce(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> int:
         with self._state_context_manager(block_number):
-            return int(self._fork_module.get_account(self.chain.state, account).nonce)
+            return int(self._fork_module.get_account(self.chain.state, address).nonce)
 
-    def get_balance(self, account, block_number="pending"):
+    def get_balance(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> int:
         with self._state_context_manager(block_number):
-            return int(self._fork_module.get_account(self.chain.state, account).balance)
+            return int(self._fork_module.get_account(self.chain.state, address).balance)
 
-    def get_code(self, account, block_number="pending"):
+    def get_code(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> bytes:
         with self._state_context_manager(block_number):
-            return self._fork_module.get_account(self.chain.state, account).code
+            return self._fork_module.get_account(self.chain.state, address).code
 
     def get_storage(
-        self, account: Address, slot: Union[int, bytes], block_number="pending"
+        self, address: str, slot: int, block_number: RequestBlockIdentifier
     ) -> int:
         if isinstance(slot, int):
             slot = int_to_big_endian(slot)
         # left pad with zero bytes to 32 bytes
         slot = slot.rjust(32, b"\x00")
         with self._state_context_manager(block_number):
-            return int(self._state_module.get_storage(self.chain.state, account, slot))
+            return int(self._state_module.get_storage(self.chain.state, address, slot))
 
     def get_base_fee(self) -> int:
         return self._pending_block["header"]["base_fee_per_gas"]

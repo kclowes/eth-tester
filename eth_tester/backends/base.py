@@ -3,6 +3,14 @@ from abc import (
     abstractmethod,
 )
 
+from eth_tester.types.requests.base import (
+    RequestHexInteger,
+    RequestHexStr,
+)
+from eth_tester.types.requests.blocks import (
+    RequestBlockIdentifier,
+)
+
 ZERO_ADDRESS = 20 * b"\x00"
 
 
@@ -72,15 +80,28 @@ class BaseChainBackend(metaclass=ABCMeta):
     # Account state
     #
     @abstractmethod
-    def get_nonce(self, account, block_number=None):
+    def get_nonce(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> int:
         raise NotImplementedError("Must be implemented by subclasses")
 
     @abstractmethod
-    def get_balance(self, account, block_number=None):
+    def get_balance(self, address: RequestHexStr, block_number) -> int:
         raise NotImplementedError("Must be implemented by subclasses")
 
     @abstractmethod
-    def get_code(self, account, block_number=None):
+    def get_code(
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier
+    ) -> bytes:
+        raise NotImplementedError("Must be implemented by subclasses")
+
+    @abstractmethod
+    def get_storage(
+        self,
+        address: RequestHexStr,
+        slot: RequestHexInteger,
+        block_number: RequestBlockIdentifier,
+    ) -> int:
         raise NotImplementedError("Must be implemented by subclasses")
 
     #
