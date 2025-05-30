@@ -65,17 +65,19 @@ from ...types.requests.base import (
     BackendContext,
     RequestHexInteger,
     RequestHexStr,
-    current_backend,
 )
 from ...types.requests.blocks import (
     RequestBlockIdentifier,
+)
+from ...types.requests.transactions import (
+    TransactionRequestObject,
 )
 from ...utils.accounts import (
     get_account_keys_from_mnemonic,
     get_default_account_keys,
 )
-from ...validation.inbound import (
-    validate_inbound_withdrawals,
+from ...utils.backend_context import (
+    with_backend_context,
 )
 from .serializers import (
     serialize_block,
@@ -344,6 +346,7 @@ def _get_vm_for_block_number(chain, block_number):
     return vm
 
 
+@with_backend_context(BackendContext.PyEVM)
 class PyEVMBackend(BaseChainBackend):
     chain = None
 
@@ -382,9 +385,6 @@ class PyEVMBackend(BaseChainBackend):
             mnemonic,
             hd_path,
         )
-
-        # set the context to PyEVM
-        current_backend.set(BackendContext.PyEVM)
 
     @classmethod
     def from_mnemonic(
@@ -552,7 +552,7 @@ class PyEVMBackend(BaseChainBackend):
         return serialize_block(block, full_transaction, is_pending)
 
     @replace_exceptions({EVMHeaderNotFound: BlockNotFound})
-    def get_block_by_hash(self, block_hash, full_transaction=True):
+    def get_block_by_hash(self, block_hash: "RequestHexStr", full_transaction=True):
         block = _get_block_by_hash(self.chain, block_hash)
         is_pending = block.number == self.chain.get_block().number
         return serialize_block(block, full_transaction, is_pending)
@@ -643,98 +643,38 @@ class PyEVMBackend(BaseChainBackend):
         vm = _get_vm_for_block_number(self.chain, block_number)
         return vm.state.base_fee
 
-    #
-    # Transactions
-    #
-    @to_dict
-    def _normalize_transaction(self, transaction, block_number="latest"):
-        is_dynamic_fee_transaction = (
-            any(_ in transaction for _ in DYNAMIC_FEE_TRANSACTION_PARAMS)
-            or
-            # if no fee params exist, default to dynamic fee transaction:
-            not any(
-                _ in transaction for _ in DYNAMIC_FEE_TRANSACTION_PARAMS + ("gasPrice",)
-            )
-        )
-        is_typed_transaction = is_dynamic_fee_transaction or "accessList" in transaction
-
-        for key in transaction:
-            if key in ("from", "type"):
-                continue
-            if key == "v" and is_typed_transaction:
-                yield "yParity", transaction[
-                    "v"
-                ]  # use yParity for typed txns, internally
-                continue
-            yield key, transaction[key]
-
-        if "nonce" not in transaction:
-            yield "nonce", self.get_nonce(transaction["from"], block_number)
-        if "data" not in transaction:
-            yield "data", b""
-        if "value" not in transaction:
-            yield "value", 0
-        if "to" not in transaction:
-            yield "to", b""
-
-        if is_dynamic_fee_transaction:
-            if not any(_ in transaction for _ in DYNAMIC_FEE_TRANSACTION_PARAMS):
-                yield "maxFeePerGas", 1 * 10**9
-                yield "maxPriorityFeePerGas", 1 * 10**9
-            elif (
-                "maxPriorityFeePerGas" in transaction
-                and "maxFeePerGas" not in transaction
-            ):
-                yield (
-                    "maxFeePerGas",
-                    transaction["maxPriorityFeePerGas"]
-                    + 2 * self.get_base_fee(block_number),
-                )
-
-        if is_typed_transaction:
-            # typed transaction
-            if "accessList" not in transaction:
-                yield "accessList", ()
-            if "chainId" not in transaction:
-                yield "chainId", self.chain.chain_id
-
     def _get_normalized_and_unsigned_evm_transaction(
         self, transaction, block_number="latest"
     ):
-        normalized_transaction = self._normalize_transaction(transaction, block_number)
-        evm_transaction = self._create_type_aware_unsigned_transaction(
-            normalized_transaction
-        )
+        evm_transaction = self._create_type_aware_unsigned_transaction(transaction)
         return evm_transaction
 
     def _get_normalized_and_signed_evm_transaction(
         self, transaction, block_number="latest"
     ):
-        if transaction["from"] not in self._key_lookup:
+        if transaction.sender not in self._key_lookup:
             raise ValidationError(
                 'No valid "from" key was provided in the transaction '
                 "which is required for transaction signing."
             )
-        signing_key = self._key_lookup[transaction["from"]]
-        normalized_transaction = self._normalize_transaction(transaction, block_number)
-        evm_transaction = self._create_type_aware_unsigned_transaction(
-            normalized_transaction
-        )
+        signing_key = self._key_lookup[transaction.sender]
+        evm_transaction = self._create_type_aware_unsigned_transaction(transaction)
         return evm_transaction.as_signed_transaction(signing_key)
 
-    def _create_type_aware_unsigned_transaction(self, normalized_txn):
-        if all(_ in normalized_txn for _ in ("accessList", "gasPrice")):
-            return self.chain.get_transaction_builder().new_unsigned_access_list_transaction(  # noqa: E501
-                **normalized_txn.serialize()
-            )
-        elif all(_ in normalized_txn for _ in DYNAMIC_FEE_TRANSACTION_PARAMS):
-            test = self.chain.get_transaction_builder()
-            txn = dict_keys_to_snake_case(normalized_txn)
-            result = test.new_unsigned_dynamic_fee_transaction(**txn)  # noqa: E501
-            return result
-        return self.chain.create_unsigned_transaction(
-            **dict_keys_to_snake_case(normalized_txn)
-        )
+    def _create_type_aware_unsigned_transaction(
+        self, transaction: TransactionRequestObject
+    ):
+        tx_builder = self.chain.get_transaction_builder()
+        match transaction.type:
+            case 1:
+                return tx_builder.new_unsigned_access_list_transaction(
+                    **transaction.serialize()
+                )
+            case 2:
+                return tx_builder.new_unsigned_dynamic_fee_transaction(
+                    **transaction.serialize()
+                )
+        return self.chain.create_unsigned_transaction(**transaction.model_dump())
 
     @replace_exceptions({EthUtilsValidationError: ValidationError})
     def send_raw_transaction(self, raw_transaction):
@@ -798,8 +738,6 @@ class PyEVMBackend(BaseChainBackend):
         """
         Apply withdrawals to the state and mine the block that includes the withdrawals.
         """
-        validate_inbound_withdrawals(withdrawals_list)
-
         vm = _get_vm_for_block_number(self.chain, "latest")
         if not isinstance(vm, ShanghaiVM):
             raise ValidationError(
@@ -831,14 +769,16 @@ class PyEVMBackend(BaseChainBackend):
         }
     )
     def estimate_gas(self, transaction, block_number="latest"):
+        tx_copy = transaction.copy()
+        tx_copy.gas = 21000
         evm_transaction = self._get_normalized_and_unsigned_evm_transaction(
-            assoc(transaction, "gas", 21000), block_number
+            tx_copy, block_number
         )
         spoofed_transaction = EVMSpoofTransaction(
-            evm_transaction, from_=transaction["from"]
+            evm_transaction, from_=transaction.sender
         )
 
-        if block_number in ("latest", "safe", "finalized"):
+        if block_number in {"latest", "safe", "finalized"}:
             return self.chain.estimate_gas(
                 spoofed_transaction, self.chain.get_block().header
             )

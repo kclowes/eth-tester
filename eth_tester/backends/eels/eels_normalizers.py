@@ -32,37 +32,7 @@ from hexbytes import (
 
 from eth_tester.utils.casing import (
     lower_camel_case_to_snake_case,
-    snake_case_to_lower_camel_case,
 )
-
-
-def eels_normalize_transaction(transaction: Dict[str, Any]) -> Dict[str, Any]:
-    normalized = {}
-    for key, value in transaction.items():
-        if key == "gas":
-            key = "gas_limit"
-
-        if isinstance(value, bytes):
-            value = value.hex()
-        elif isinstance(value, int):
-            value = hex(value)
-        elif key == "access_list":
-            # turn back to dict
-            value = [
-                {
-                    "address": entry[0].hex(),
-                    "storageKeys": [hex(key) for key in entry[1]],
-                }
-                for entry in value
-            ]
-
-        if key in ("y_parity",):
-            # for some reason, y_parity is not camelCased :/
-            normalized[key] = value
-        else:
-            normalized[snake_case_to_lower_camel_case(key)] = value
-
-    return normalized
 
 
 def eels_normalize_inbound_raw_blob_transaction(

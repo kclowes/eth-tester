@@ -18,14 +18,14 @@ from pydantic_core import (
 )
 
 from eth_tester.types.requests.base import (
+    BackendContext,
     RequestHexBytes,
     RequestHexInteger,
     RequestModel,
     RequestType,
 )
-from eth_tester.validation.inbound import (
-    validate_account_access,
-)
+
+# -- transaction models -- #
 
 
 class RequestAccountAccess(RequestType):
@@ -34,7 +34,7 @@ class RequestAccountAccess(RequestType):
     # TODO: fully implement this class
 
     _schema = core_schema.any_schema()
-    validator = validate_account_access
+    # validator = validate_account_access
 
     @classmethod
     def serializer(cls, v: Tuple[bytes, Tuple[int]]) -> ...:
@@ -65,15 +65,20 @@ class BaseTransactionRequestModel(RequestModel):
     to: "RequestHexBytes" = Field(default="0x0000000000000000000000000000000000000000")
     value: Optional["RequestHexInteger"] = Field(default="0x0")
 
+    _key_mapper = {
+        BackendContext.PyEVM: {"sender": None},
+        BackendContext.EELS: {"gas": "gasLimit"},
+    }
 
-class LegacyTransaction(BaseTransactionRequestModel):
+
+class LegacyTransactionRequest(BaseTransactionRequestModel):
     """Legacy transaction type."""
 
     gas_price: Optional["RequestHexInteger"]
     type: Optional["RequestHexInteger"] = Field(default="0x0")
 
 
-class SignedLegacyTransactionRequest(LegacyTransaction):
+class SignedLegacyTransactionRequest(LegacyTransactionRequest):
     r: "RequestHexInteger"
     s: "RequestHexInteger"
     v: "RequestHexInteger"
@@ -88,7 +93,11 @@ class SignedLegacyTransactionRequest(LegacyTransaction):
 # -- typed transactions -- #
 
 
-class SignedTypedTransaction(BaseTransactionRequestModel):
+class TypedTransactionRequest(BaseTransactionRequestModel):
+    """Base model for typed transactions."""
+
+
+class SignedTypedTransactionRequest(TypedTransactionRequest):
     """Base model for signed typed transactions."""
 
     r: "RequestHexInteger"
@@ -103,34 +112,38 @@ class SignedTypedTransaction(BaseTransactionRequestModel):
 
 
 # -- type 1 tx -- #
-class AccessListTransaction(BaseTransactionRequestModel):
+class AccessListTransactionRequest(TypedTransactionRequest):
     """EIP-2930 access list transaction type."""
 
     access_list: List[RequestAccountAccess]
     gas_price: "RequestHexInteger"
-    type: "RequestHexInteger" = Field(exclude=True, default="0x1")
+    type: "RequestHexInteger" = Field(exclude=True, default="0x1", frozen=True)
 
 
-class SignedAccessListTransaction(SignedTypedTransaction, AccessListTransaction):
+class SignedAccessListTransactionRequest(
+    SignedTypedTransactionRequest, AccessListTransactionRequest
+):
     """Signed EIP-2930 access list transaction type."""
 
 
 # -- type 2 tx -- #
-class DynamicFeeTransaction(BaseTransactionRequestModel):
+class DynamicFeeTransactionRequest(TypedTransactionRequest):
     """EIP-1559 dynamic fee transaction type."""
 
     access_list: List[RequestAccountAccess] = Field(default_factory=list)
     max_fee_per_gas: Optional["RequestHexInteger"] = None
     max_priority_fee_per_gas: Optional["RequestHexInteger"] = None
-    type: "RequestHexInteger" = Field(exclude=True, default="0x2")
+    type: "RequestHexInteger" = Field(exclude=True, default="0x2", frozen=True)
 
 
-class SignedDynamicFeeTransaction(SignedTypedTransaction, DynamicFeeTransaction):
+class SignedDynamicFeeTransactionRequest(
+    SignedTypedTransactionRequest, DynamicFeeTransactionRequest
+):
     """Signed EIP-1559 dynamic fee transaction type."""
 
 
 # -- type 3 tx -- #
-class BlobTransaction(BaseTransactionRequestModel):
+class BlobTransactionRequest(TypedTransactionRequest):
     """EIP-4844 blob transaction type."""
 
     access_list: Optional[List[RequestAccountAccess]] = None
@@ -138,33 +151,37 @@ class BlobTransaction(BaseTransactionRequestModel):
     max_fee_per_blob_gas: Optional["RequestHexInteger"] = None
     max_fee_per_gas: Optional["RequestHexInteger"] = None
     max_priority_fee_per_gas: Optional["RequestHexInteger"] = None
-    type: "RequestHexInteger" = Field(exclude=True, default="0x3")
+    type: "RequestHexInteger" = Field(exclude=True, default="0x3", frozen=True)
 
 
-class SignedBlobTransaction(SignedTypedTransaction, BlobTransaction):
+class SignedBlobTransactionRequest(
+    SignedTypedTransactionRequest, BlobTransactionRequest
+):
     """Signed EIP-4844 blob transaction type."""
 
 
 # -- type 4 tx -- #
-class SetCodeTransaction(BaseTransactionRequestModel):
+class SetCodeTransactionRequest(TypedTransactionRequest):
     """EIP-7702 set code transaction type."""
 
     access_list: Optional[List[RequestAccountAccess]] = None
     authorization_list: List[RequestSetCodeAuthorization] = Field(default_factory=list)
     max_fee_per_gas: Optional["RequestHexInteger"] = None
     max_priority_fee_per_gas: Optional["RequestHexInteger"] = None
-    type: "RequestHexInteger" = Field(exclude=True, default="0x4")
+    type: "RequestHexInteger" = Field(exclude=True, default="0x4", frozen=True)
 
 
-class SignedSetCodeTransaction(SignedTypedTransaction, SetCodeTransaction):
+class SignedSetCodeTransactionRequest(
+    SignedTypedTransactionRequest, SetCodeTransactionRequest
+):
     """Signed EIP-7702 set code transaction type."""
 
 
 # -- generic transaction discriminator -- #
 
 
-def transaction_discriminator(v: Dict[str, Any]) -> str:
-    """Discriminate transaction type based on present fields."""
+def transaction_request_discriminator(v: Dict[str, Any]) -> str:
+    """Discriminate transaction request type based on present fields."""
     if not isinstance(v, dict):
         raise ValueError("Transaction must be a dictionary")
 
@@ -211,16 +228,16 @@ def transaction_discriminator(v: Dict[str, Any]) -> str:
 
 TransactionRequestObject = Annotated[
     Union[
-        Annotated[LegacyTransaction, Tag("legacy")],
+        Annotated[LegacyTransactionRequest, Tag("legacy")],
         Annotated[SignedLegacyTransactionRequest, Tag("signed_legacy")],
-        Annotated[AccessListTransaction, Tag("access_list")],
-        Annotated[SignedAccessListTransaction, Tag("signed_access_list")],
-        Annotated[DynamicFeeTransaction, Tag("dynamic_fee")],
-        Annotated[SignedDynamicFeeTransaction, Tag("signed_dynamic_fee")],
-        Annotated[BlobTransaction, Tag("blob")],
-        Annotated[SignedBlobTransaction, Tag("signed_blob")],
-        Annotated[SetCodeTransaction, Tag("set_code")],
-        Annotated[SignedSetCodeTransaction, Tag("signed_set_code")],
+        Annotated[AccessListTransactionRequest, Tag("access_list")],
+        Annotated[SignedAccessListTransactionRequest, Tag("signed_access_list")],
+        Annotated[DynamicFeeTransactionRequest, Tag("dynamic_fee")],
+        Annotated[SignedDynamicFeeTransactionRequest, Tag("signed_dynamic_fee")],
+        Annotated[BlobTransactionRequest, Tag("blob")],
+        Annotated[SignedBlobTransactionRequest, Tag("signed_blob")],
+        Annotated[SetCodeTransactionRequest, Tag("set_code")],
+        Annotated[SignedSetCodeTransactionRequest, Tag("signed_set_code")],
     ],
-    Discriminator(transaction_discriminator),
+    Discriminator(transaction_request_discriminator),
 ]

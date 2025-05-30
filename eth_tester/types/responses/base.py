@@ -39,7 +39,9 @@ class SerializedModel(Dict[str, Any], Generic[T]):
         return core_schema.with_info_before_validator_function(
             validate_and_serialize,
             core_schema.dict_schema(),
-            serialization=core_schema.to_string_ser_schema(),
+            serialization=core_schema.wrap_serializer_function_ser_schema(
+                lambda v, info: v.serialize()
+            ),
         )
 
 

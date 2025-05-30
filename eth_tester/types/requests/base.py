@@ -1,14 +1,8 @@
 from abc import (
     abstractmethod,
 )
-from contextvars import (
-    ContextVar,
-)
 from dataclasses import (
     dataclass,
-)
-from enum import (
-    Enum,
 )
 from functools import (
     partial,
@@ -38,18 +32,12 @@ from pydantic_core import (
     core_schema,
 )
 
+from eth_tester.utils.backend_context import (
+    BackendContext,
+    current_backend,
+)
 from eth_tester.utils.normalizers import (
     from_hexstr,
-)
-
-
-class BackendContext(str, Enum):
-    PyEVM = "py-evm"
-    EELS = "eels"
-
-
-current_backend: ContextVar[BackendContext] = ContextVar(
-    "current_backend", default=BackendContext.EELS
 )
 
 
@@ -67,7 +55,7 @@ BACKEND_SERIALIZER_CONFIG: Final = {
         bytes_serializer=identity,  # bytes
     ),
     BackendContext.EELS: BackendConfig(
-        integer_serializer=to_hex,
+        integer_serializer=lambda v: to_hex(int(v)),
         bytes_serializer=to_hex,
     ),
 }
@@ -75,11 +63,37 @@ BACKEND_SERIALIZER_CONFIG: Final = {
 
 # -- base model -- #
 class RequestModel(CamelModel):
+    _key_mapper: Dict[BackendContext, Dict[str, str]]
     model_config = ConfigDict(
         **merge(CamelModel.model_config, {"populate_by_name": False})
     )
 
     def serialize(self) -> Dict[str, Any]:
+        backend = current_backend.get()
+
+        key_map = self._key_mapper.get(backend, {})
+
+        if backend == BackendContext.EELS:
+            serialized_data = self.model_dump(by_alias=True, exclude_none=True)
+        else:
+            serialized_data = self.model_dump(exclude_none=True)
+
+        for field in key_map:
+            if field in serialized_data:
+                new_key = key_map[field]
+                if new_key is None:
+                    serialized_data.pop(field)
+                else:
+                    serialized_data[new_key] = serialized_data.pop(field)
+
+        for key, value in serialized_data.items():
+            if isinstance(value, RequestType):
+                serialized_data[key] = value._get_serializer_for_current_backend(
+                    backend
+                )(value)
+        return serialized_data
+
+    def json_serialize(self) -> Dict[str, Any]:
         return self.model_dump(by_alias=True)
 
 

@@ -10,6 +10,7 @@ from typing import (
 from eth_utils import (
     is_integer,
     is_same_address,
+    to_hex,
     to_list,
     to_tuple,
 )
@@ -48,14 +49,21 @@ from eth_tester.types.requests.blocks import (
     RequestBlockIdentifier,
 )
 from eth_tester.types.requests.transactions import (
-    SignedTypedTransaction,
+    DynamicFeeTransactionRequest,
+    SignedDynamicFeeTransactionRequest,
+    SignedTypedTransactionRequest,
     TransactionRequestObject,
+    TypedTransactionRequest,
 )
 from eth_tester.types.responses.base import (
     ResponseHexStr,
 )
 from eth_tester.types.responses.blocks import (
     BlockRPCResponse,
+)
+from eth_tester.types.responses.transactions import (
+    TransactionRPCResponse,
+    TxReceiptRPCResponse,
 )
 from eth_tester.utils.accounts import (
     private_key_to_address,
@@ -68,9 +76,6 @@ from eth_tester.utils.transactions import (
     extract_transaction_type,
     extract_valid_transaction_params,
     remove_matching_transaction_from_list,
-)
-from eth_tester.validation.outbound import (
-    validate_hexstr,
 )
 
 
@@ -120,12 +125,7 @@ def handle_auto_mining(func):
 
 class EthereumTester:
     backend = None
-
-    validator = None
-    normalizer = None
-
     fork_blocks = None
-
     auto_mine_transactions = None
 
     def __init__(self, backend=None, auto_mine_transactions=True):
@@ -173,7 +173,6 @@ class EthereumTester:
     # Time Traveling
     #
     def time_travel(self, to_timestamp):
-        self.validator.validate_inbound_timestamp(to_timestamp)
         # make sure we are not traveling back in time as this is not possible.
         current_timestamp = self.get_block_by_number("pending")["timestamp"]
         if to_timestamp == current_timestamp:
@@ -190,29 +189,23 @@ class EthereumTester:
     #
     # Accounts
     #
-    def get_accounts(self):
+    @validate_call(validate_return=True)
+    def get_accounts(self) -> List[ResponseHexStr]:
         raw_accounts = self.backend.get_accounts()
         return raw_accounts
 
     def add_account(self, private_key, password=None):
-        # TODO: validation
-        self.validator.validate_inbound_private_key(private_key)
-        raw_private_key = self.normalizer.normalize_inbound_private_key(private_key)
-        raw_account = private_key_to_address(raw_private_key)
-        account = self.normalizer.normalize_outbound_account(raw_account)
+        account = private_key_to_address(private_key)
         if any(is_same_address(account, value) for value in self.get_accounts()):
             raise ValidationError("Account already present in account list")
 
-        self.backend.add_account(raw_private_key)
-        self._account_passwords[raw_account] = password
-        # TODO: outbound normalization
+        self.backend.add_account(private_key)
+        self._account_passwords[account] = password
         return account
 
     def unlock_account(self, account, password, unlock_seconds=None):
-        self.validator.validate_inbound_account(account)
-        raw_account = self.normalizer.normalize_inbound_account(account)
         try:
-            account_password = self._account_passwords[raw_account]
+            account_password = self._account_passwords[account]
         except KeyError:
             raise ValidationError("Unknown account")
 
@@ -227,18 +220,15 @@ class EthereumTester:
         else:
             unlock_until = time.time() + unlock_seconds
 
-        self._account_unlock[raw_account] = unlock_until
+        self._account_unlock[account] = unlock_until
 
     def lock_account(self, account):
-        self.validator.validate_inbound_account(account)
-        raw_account = self.normalizer.normalize_inbound_account(account)
-
-        if raw_account not in self._account_passwords:
+        if account not in self._account_passwords:
             raise ValidationError("Unknown account")
-        elif self._account_passwords[raw_account] is None:
+        elif self._account_passwords[account] is None:
             raise ValidationError("Account does not have a password")
 
-        self._account_unlock[raw_account] = False
+        self._account_unlock[account] = False
 
     @validate_call(validate_return=True)
     def get_balance(
@@ -267,10 +257,7 @@ class EthereumTester:
     ) -> ResponseHexStr:
         return self.backend.get_nonce(address, block_number)
 
-    #
-    # Blocks, Transactions, Receipts
-    #
-
+    # -- transactions -- #
     @staticmethod
     def _normalize_pending_transaction(pending_transaction):
         """
@@ -281,9 +268,9 @@ class EthereumTester:
         pending_transaction = assoc(pending_transaction, "type", _type)
 
         # TODO: Sometime in 2022 the inclusion of gasPrice may be removed from
-        # dynamic fee transactions and we can get rid of this behavior.
-        # https://github.com/ethereum/execution-specs/pull/251
-        # add gasPrice = maxFeePerGas to pending dynamic fee transactions
+        #  dynamic fee transactions and we can get rid of this behavior.
+        #  https://github.com/ethereum/execution-specs/pull/251
+        #  add gasPrice = maxFeePerGas to pending dynamic fee transactions
         if _type == "0x2":
             pending_transaction = assoc(
                 pending_transaction, "gasPrice", pending_transaction["maxFeePerGas"]
@@ -300,21 +287,63 @@ class EthereumTester:
             f"No transaction found for transaction hash: {transaction_hash}"
         )
 
-    def get_transaction_by_hash(self, transaction_hash: RequestHexBytes):
+    def _fill_transaction_defaults(
+        self,
+        transaction: TransactionRequestObject,
+        block_number: RequestBlockIdentifier = "latest",
+        is_estimate_gas: bool = False,
+    ) -> None:
+        """
+        Fill in default values for transaction parameters if not specified.
+        """
+        default_max_fee = 1 * 10**9
+
+        is_dynamic_fee_transaction = isinstance(
+            transaction,
+            (DynamicFeeTransactionRequest, SignedDynamicFeeTransactionRequest),
+        )
+        is_typed_transaction = isinstance(transaction, TypedTransactionRequest)
+
+        if not transaction.nonce:
+            transaction.nonce = self.backend.get_nonce(transaction.sender, block_number)
+
+        if is_dynamic_fee_transaction:
+            if (
+                not transaction.max_fee_per_gas
+                and not transaction.max_priority_fee_per_gas
+            ):
+                # set both to default if neither is provided
+                transaction.max_priority_fee_per_gas = default_max_fee
+                transaction.max_fee_per_gas = default_max_fee
+            elif (
+                transaction.max_priority_fee_per_gas and not transaction.max_fee_per_gas
+            ):
+                # calculate max_fee_per_gas based on priority fee and base fee
+                base_fee = self.backend.get_base_fee(block_number)
+                transaction.max_fee_per_gas = transaction.max_priority_fee_per_gas + (
+                    2 * base_fee
+                )
+
+        # set chain_id for typed transactions if not already set
+        if is_typed_transaction and not transaction.chain_id:
+            transaction.chain_id = int(self.backend.chain.chain_id)
+
+        if not transaction.gas and not is_estimate_gas:
+            transaction.gas = self.backend.estimate_gas(
+                transaction, block_number=block_number
+            )
+
+    @validate_call(validate_return=True)
+    def get_transaction_by_hash(
+        self, transaction_hash: RequestHexBytes
+    ) -> TransactionRPCResponse:
         try:
             pending_transaction = self._get_pending_transaction_by_hash(
                 transaction_hash
             )
             return self._normalize_pending_transaction(pending_transaction)
         except TransactionNotFound:
-            raw_transaction_hash = self.normalizer.normalize_inbound_transaction_hash(
-                transaction_hash,
-            )
-            raw_transaction = self.backend.get_transaction_by_hash(raw_transaction_hash)
-            self.validator.validate_outbound_transaction(raw_transaction)
-            transaction = self.normalizer.normalize_outbound_transaction(
-                raw_transaction
-            )
+            transaction = self.backend.get_transaction_by_hash(transaction_hash)
             return transaction
 
     @validate_call(validate_return=True)
@@ -323,23 +352,17 @@ class EthereumTester:
     ) -> BlockRPCResponse:
         return self.backend.get_block_by_number(block_number, full_transactions)
 
-    def get_block_by_hash(self, block_hash, full_transactions=False):
-        self.validator.validate_inbound_block_hash(block_hash)
-        raw_block_hash = self.normalizer.normalize_inbound_block_hash(block_hash)
-        raw_block = self.backend.get_block_by_hash(raw_block_hash, full_transactions)
-        self.validator.validate_outbound_block(raw_block)
-        block = self.normalizer.normalize_outbound_block(raw_block)
-        return block
+    @validate_call(validate_return=True)
+    def get_block_by_hash(
+        self, block_hash: RequestHexBytes, full_transactions=False
+    ) -> BlockRPCResponse:
+        return self.backend.get_block_by_hash(block_hash, full_transactions)
 
-    def get_transaction_receipt(self, transaction_hash):
-        self.validator.validate_inbound_transaction_hash(transaction_hash)
-        raw_transaction_hash = self.normalizer.normalize_inbound_transaction_hash(
-            transaction_hash,
-        )
-        raw_receipt = self.backend.get_transaction_receipt(raw_transaction_hash)
-        self.validator.validate_outbound_receipt(raw_receipt)
-        receipt = self.normalizer.normalize_outbound_receipt(raw_receipt)
-        return receipt
+    @validate_call(validate_return=True)
+    def get_transaction_receipt(
+        self, transaction_hash: RequestHexBytes
+    ) -> TxReceiptRPCResponse:
+        return self.backend.get_transaction_receipt(transaction_hash)
 
     def get_fee_history(
         self, block_count=1, newest_block="latest", reward_percentiles: List[int] = ()
@@ -349,9 +372,7 @@ class EthereumTester:
         )
         return fee_history
 
-    #
-    # Mining
-    #
+    # -- block inclusion -- #
     def enable_auto_mine_transactions(self):
         self.auto_mine_transactions = True
         if not self.backend.handles_pending_transactions:
@@ -366,46 +387,42 @@ class EthereumTester:
     def disable_auto_mine_transactions(self):
         self.auto_mine_transactions = False
 
-    def mine_blocks(self, num_blocks=1, coinbase=ZERO_ADDRESS_HEX):
-        self.validator.validate_inbound_account(coinbase)
-        normalized_coinbase = self.normalizer.normalize_inbound_account(coinbase)
-
+    @validate_call(validate_return=True)
+    def mine_blocks(
+        self, num_blocks: int = 1, coinbase: RequestHexBytes = ZERO_ADDRESS_HEX
+    ) -> List[ResponseHexStr]:
         if (
             not self.auto_mine_transactions
             and not self.backend.handles_pending_transactions
         ):
             self._pop_pending_transactions_to_pending_block()
 
-        raw_block_hashes = self.backend.mine_blocks(num_blocks, normalized_coinbase)
+        _block_hashes = self.backend.mine_blocks(num_blocks, coinbase)
+        block_hashes = []
+        for blockhash in _block_hashes:
+            if not isinstance(blockhash, str):
+                block_hashes.append(to_hex(blockhash))
 
-        if len(raw_block_hashes) != num_blocks:
+        if len(block_hashes) != num_blocks:
             raise ValidationError(
                 f"Invariant: tried to mine {num_blocks} blocks.  Got "
-                f"{len(raw_block_hashes)} mined block hashes."
+                f"{len(block_hashes)} mined block hashes."
             )
-
-        for raw_block_hash in raw_block_hashes:
-            self.validator.validate_outbound_block_hash(raw_block_hash)
-        block_hashes = [
-            self.normalizer.normalize_outbound_block_hash(raw_block_hash)
-            for raw_block_hash in raw_block_hashes
-        ]
 
         # feed the block hashes to any block filters
         for block_hash in block_hashes:
             block = self.get_block_by_hash(block_hash)
 
             for _, block_filter in self._block_filters.items():
-                raw_block_hash = self.normalizer.normalize_inbound_block_hash(
-                    block_hash
-                )
-                block_filter.add(raw_block_hash)
+                block_filter.add(block_hash)
             self._process_block_logs(block)
 
         return block_hashes
 
-    def mine_block(self, coinbase=ZERO_ADDRESS_HEX):
-        self.validator.validate_inbound_account(coinbase)
+    @validate_call(validate_return=True)
+    def mine_block(
+        self, coinbase: RequestHexBytes = ZERO_ADDRESS_HEX
+    ) -> ResponseHexStr:
         block_hash = self.mine_blocks(1, coinbase=coinbase)[0]
         return block_hash
 
@@ -420,8 +437,7 @@ class EthereumTester:
         for transaction_hash in block["transactions"]:
             receipt = self.get_transaction_receipt(transaction_hash)
             for log_entry in receipt["logs"]:
-                raw_log_entry = self.normalizer.normalize_inbound_log_entry(log_entry)
-                filter_.add(raw_log_entry)
+                filter_.add(log_entry)
 
     def _pop_pending_transactions_to_pending_block(self):
         sent_transaction_hashes = self._add_all_to_pending_block(
@@ -444,51 +460,38 @@ class EthereumTester:
     def _handle_pending_tx_filtering(self, transaction_hash):
         # feed the transaction hash to any pending transaction filters.
         for _, filter_ in self._pending_transaction_filters.items():
-            raw_transaction_hash = self.normalizer.normalize_inbound_transaction_hash(
-                transaction_hash,
-            )
-            filter_.add(raw_transaction_hash)
+            filter_.add(transaction_hash)
 
     @handle_auto_mining
     @validate_call
     def send_raw_transaction(self, raw_transaction_hex: RequestHexBytes):
-        self.validator.validate_inbound_raw_transaction(raw_transaction_hex)
-        raw_transaction = self.normalizer.normalize_inbound_raw_transaction(
-            raw_transaction_hex
-        )
-        raw_transaction_hash = self.backend.send_raw_transaction(raw_transaction)
-        self.validator.validate_outbound_transaction_hash(raw_transaction_hash)
-        transaction_hash = self.normalizer.normalize_outbound_transaction_hash(
-            raw_transaction_hash,
-        )
+        transaction_hash = self.backend.send_raw_transaction(raw_transaction_hex)
         self._handle_pending_tx_filtering(transaction_hash)
         return transaction_hash
 
+    @validate_call(validate_return=True)
     @handle_auto_mining
-    def send_transaction(self, transaction):
+    def send_transaction(self, transaction: TransactionRequestObject) -> ResponseHexStr:
+        self._fill_transaction_defaults(transaction)
         return self._add_transaction_to_pending_block(transaction)
 
-    def call(self, transaction, block_number="pending"):
-        self.validator.validate_inbound_transaction(
-            transaction, txn_internal_type="call"
-        )
-        raw_transaction = self.normalizer.normalize_inbound_transaction(transaction)
-        self.validator.validate_inbound_block_number(block_number)
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_result = self.backend.call(raw_transaction, raw_block_number)
-        self.validator.validate_outbound_return_data(raw_result)
-        result = self.normalizer.normalize_outbound_return_data(raw_result)
-        return result
+    @validate_call(validate_return=True)
+    def call(
+        self, transaction: TransactionRequestObject, block_number="pending"
+    ) -> ResponseHexStr:
+        self._fill_transaction_defaults(transaction, block_number)
+        return self.backend.call(transaction, block_number)
 
-    def estimate_gas(self, transaction, block_number="pending"):
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        gas_estimate = self.backend.estimate_gas(transaction, raw_block_number)
-        return gas_estimate
+    @validate_call(validate_return=True)
+    def estimate_gas(
+        self, transaction: TransactionRequestObject, block_number="pending"
+    ) -> ResponseHexStr:
+        self._fill_transaction_defaults(transaction, block_number, is_estimate_gas=True)
+        return self.backend.estimate_gas(transaction, block_number)
 
     #
     # Private Transaction API
     #
-    @validate_call
     def _add_transaction_to_pending_block(self, transaction: TransactionRequestObject):
         if transaction.sender in self._account_passwords:
             unlocked_until = self._account_unlock[transaction.sender]
@@ -501,18 +504,13 @@ class EthereumTester:
             if is_locked:
                 raise AccountLocked("The account is currently locked")
 
-        if isinstance(transaction, SignedTypedTransaction):
-            raw_transaction_hash = self.backend.send_signed_transaction(transaction)
+        if isinstance(transaction, SignedTypedTransactionRequest):
+            tx_hash = self.backend.send_signed_transaction(transaction)
         else:
-            raw_transaction_hash = self.backend.send_transaction(transaction)
+            tx_hash = self.backend.send_transaction(transaction)
 
-        transaction_hash = self.normalizer.normalize_outbound_transaction_hash(
-            raw_transaction_hash,
-        )
-        validate_hexstr(transaction_hash)
-
-        self._handle_pending_tx_filtering(transaction_hash)
-        return transaction_hash
+        self._handle_pending_tx_filtering(tx_hash)
+        return tx_hash
 
     #
     # Snapshot and Revert
@@ -564,7 +562,6 @@ class EthereumTester:
             compose(
                 bool,
                 self.get_transaction_by_hash,
-                self.normalizer.normalize_outbound_transaction_hash,
             ),
             lambda v: False,
         )
@@ -577,7 +574,6 @@ class EthereumTester:
             compose(
                 bool,
                 self.get_transaction_by_hash,
-                self.normalizer.normalize_outbound_transaction_hash,
                 operator.itemgetter("transactionHash"),
             ),
             lambda v: False,
@@ -589,44 +585,24 @@ class EthereumTester:
     # Filters
     #
     def create_block_filter(self):
-        raw_filter_id = next(self._filter_counter)
-        self._block_filters[raw_filter_id] = Filter(filter_params=None)
-        filter_id = self.normalizer.normalize_outbound_filter_id(raw_filter_id)
+        filter_id = next(self._filter_counter)
+        self._block_filters[filter_id] = Filter(filter_params=None)
         return filter_id
 
     def create_pending_transaction_filter(self):
-        raw_filter_id = next(self._filter_counter)
-        self._pending_transaction_filters[raw_filter_id] = Filter(filter_params=None)
-        filter_id = self.normalizer.normalize_outbound_filter_id(raw_filter_id)
+        filter_id = next(self._filter_counter)
+        self._pending_transaction_filters[filter_id] = Filter(filter_params=None)
         return filter_id
 
     def create_log_filter(
         self, from_block=None, to_block=None, address=None, topics=None
     ):
-        self.validator.validate_inbound_filter_params(
-            from_block=from_block,
-            to_block=to_block,
-            address=address,
-            topics=topics,
-        )
-        (
-            raw_from_block,
-            raw_to_block,
-            raw_address,
-            raw_topics,
-        ) = self.normalizer.normalize_inbound_filter_params(
-            from_block=from_block,
-            to_block=to_block,
-            address=address,
-            topics=topics,
-        )
-
         raw_filter_id = next(self._filter_counter)
         raw_filter_params = {
-            "from_block": raw_from_block,
-            "to_block": raw_to_block,
-            "addresses": raw_address,
-            "topics": raw_topics,
+            "from_block": from_block,
+            "to_block": to_block,
+            "addresses": address,
+            "topics": topics,
         }
         filter_fn = partial(check_if_log_matches, **raw_filter_params)
         new_filter = Filter(
@@ -635,12 +611,12 @@ class EthereumTester:
         )
         self._log_filters[raw_filter_id] = new_filter
 
-        if is_integer(raw_from_block):
-            if is_integer(raw_to_block):
-                upper_bound = raw_to_block + 1
+        if is_integer(from_block):
+            if is_integer(to_block):
+                upper_bound = to_block + 1
             else:
                 upper_bound = self.get_block_by_number("pending")["number"]
-            for block_number in range(raw_from_block, upper_bound):
+            for block_number in range(from_block, upper_bound):
                 block = self.get_block_by_number(block_number)
                 self._add_log_entries_to_filter(block, new_filter)
 
@@ -662,69 +638,44 @@ class EthereumTester:
 
     @to_tuple
     def get_only_filter_changes(self, filter_id):
-        raw_filter_id = self.normalizer.normalize_inbound_filter_id(filter_id)
-
-        if raw_filter_id in self._block_filters:
-            filter_ = self._block_filters[raw_filter_id]
-            normalize_fn = self.normalizer.normalize_outbound_block_hash
-        elif raw_filter_id in self._pending_transaction_filters:
-            filter_ = self._pending_transaction_filters[raw_filter_id]
-            normalize_fn = self.normalizer.normalize_outbound_transaction_hash
-        elif raw_filter_id in self._log_filters:
-            filter_ = self._log_filters[raw_filter_id]
-            normalize_fn = self.normalizer.normalize_outbound_log_entry
+        if filter_id in self._block_filters:
+            filter_ = self._block_filters[filter_id]
+            # normalize_fn = self.normalizer.normalize_outbound_block_hash
+        elif filter_id in self._pending_transaction_filters:
+            filter_ = self._pending_transaction_filters[filter_id]
+            # normalize_fn = self.normalizer.normalize_outbound_transaction_hash
+        elif filter_id in self._log_filters:
+            filter_ = self._log_filters[filter_id]
+            # normalize_fn = self.normalizer.normalize_outbound_log_entry
         else:
             raise FilterNotFound("Unknown filter id")
 
-        for item in filter_.get_changes():
-            yield normalize_fn(item)
+        yield from filter_.get_changes()
 
     @to_tuple
     def get_all_filter_logs(self, filter_id):
-        self.validator.validate_inbound_filter_id(filter_id)
-        raw_filter_id = self.normalizer.normalize_inbound_filter_id(filter_id)
-
-        if raw_filter_id in self._block_filters:
-            filter_ = self._block_filters[raw_filter_id]
-            normalize_fn = self.normalizer.normalize_outbound_block_hash
-        elif raw_filter_id in self._pending_transaction_filters:
-            filter_ = self._pending_transaction_filters[raw_filter_id]
-            normalize_fn = self.normalizer.normalize_outbound_transaction_hash
-        elif raw_filter_id in self._log_filters:
-            filter_ = self._log_filters[raw_filter_id]
-            normalize_fn = self.normalizer.normalize_outbound_log_entry
+        if filter_id in self._block_filters:
+            filter_ = self._block_filters[filter_id]
+            # normalize_fn = self.normalizer.normalize_outbound_block_hash
+        elif filter_id in self._pending_transaction_filters:
+            filter_ = self._pending_transaction_filters[filter_id]
+            # normalize_fn = self.normalizer.normalize_outbound_transaction_hash
+        elif filter_id in self._log_filters:
+            filter_ = self._log_filters[filter_id]
+            # normalize_fn = self.normalizer.normalize_outbound_log_entry
         else:
             raise FilterNotFound("Unknown filter id")
 
-        for item in filter_.get_all():
-            yield normalize_fn(item)
+        yield from filter_.get_all()
 
     @to_tuple
     def get_logs(self, from_block=None, to_block=None, address=None, topics=None):
-        self.validator.validate_inbound_filter_params(
-            from_block=from_block,
-            to_block=to_block,
-            address=address,
-            topics=topics,
-        )
-        (
-            raw_from_block,
-            raw_to_block,
-            raw_address,
-            raw_topics,
-        ) = self.normalizer.normalize_inbound_filter_params(
-            from_block=from_block,
-            to_block=to_block,
-            address=address,
-            topics=topics,
-        )
-
         # set up the filter object
         raw_filter_params = {
-            "from_block": raw_from_block,
-            "to_block": raw_to_block,
-            "addresses": raw_address,
-            "topics": raw_topics,
+            "from_block": from_block,
+            "to_block": to_block,
+            "addresses": address,
+            "topics": topics,
         }
         filter_fn = partial(
             check_if_log_matches,
@@ -735,23 +686,20 @@ class EthereumTester:
             filter_fn=filter_fn,
         )
 
-        # Set from/to block defaults
-        if raw_from_block is None:
-            raw_from_block = "latest"
-        if raw_to_block is None:
-            raw_to_block = "latest"
+        from_block = from_block or "latest"
+        to_block = to_block or "latest"
 
         # Determine lower bound for block range.
-        if isinstance(raw_from_block, int):
-            lower_bound = raw_from_block
+        if isinstance(from_block, int):
+            lower_bound = from_block
         else:
-            lower_bound = self.get_block_by_number(raw_from_block)["number"]
+            lower_bound = self.get_block_by_number(from_block)["number"]
 
         # Determine upper bound for block range.
-        if isinstance(raw_to_block, int):
-            upper_bound = raw_to_block
+        if isinstance(to_block, int):
+            upper_bound = to_block
         else:
-            upper_bound = self.get_block_by_number(raw_to_block)["number"]
+            upper_bound = self.get_block_by_number(to_block)["number"]
 
         # Enumerate the blocks in the block range to find all log entries which match.
         for block_number in range(lower_bound, upper_bound + 1):
@@ -764,6 +712,5 @@ class EthereumTester:
                     )
                     log_filter.add(raw_log_entry)
 
-        # Return the matching log entries
-        for item in log_filter.get_all():
-            yield self.normalizer.normalize_outbound_log_entry(item)
+        # return the matching log entries
+        yield from log_filter.get_all()

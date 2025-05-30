@@ -5,6 +5,7 @@ import copy
 import os
 import time
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     List,
@@ -36,10 +37,12 @@ from eth_utils import (
 from ...types.requests.base import (
     BackendContext,
     RequestHexStr,
-    current_backend,
 )
 from ...types.requests.blocks import (
     RequestBlockIdentifier,
+)
+from ...utils.backend_context import (
+    with_backend_context,
 )
 from .utils import (
     eels_is_available,
@@ -124,14 +127,9 @@ from ...utils.accounts import (
 )
 from ...utils.transactions import (
     calculate_effective_gas_price,
-    normalize_transaction_fields,
-)
-from ...validation.inbound import (
-    validate_inbound_withdrawals,
 )
 from .eels_normalizers import (
     eels_normalize_inbound_raw_blob_transaction,
-    eels_normalize_transaction,
 )
 from .serializers import (
     serialize_block,
@@ -141,6 +139,14 @@ from .serializers import (
 from .utils import (
     EELSStateContext,
 )
+
+if TYPE_CHECKING:
+    from ...types.requests.transactions import (
+        TransactionRequestObject,
+    )
+    from ...types.responses.transactions import (
+        TransactionRPCResponse,
+    )
 
 GENESIS_DIFFICULTY = 131072
 # gas limit at London fork on mainnet (arbitrary/taken from pyevm backend)
@@ -166,6 +172,7 @@ class EELSBlockChain(BlockChain):
         return self.blocks[-1]
 
 
+@with_backend_context(BackendContext.EELS)
 class EELSBackend(BaseChainBackend):
     logger = logging.get_logger("eth-tester.backends.EELSBackend")
     handles_pending_transactions = True
@@ -213,9 +220,6 @@ class EELSBackend(BaseChainBackend):
             hd_path=hd_path,
         )
         self._debug_mode = debug_mode
-
-        # set the context to EELS
-        current_backend.set(BackendContext.EELS)
 
     @property
     def _pending_block(self):
@@ -340,7 +344,9 @@ class EELSBackend(BaseChainBackend):
     #
     @property
     def _key_lookup(self):
-        return {key.public_key.to_checksum_address(): key for key in self._account_keys}
+        return {
+            key.public_key.to_canonical_address(): key for key in self._account_keys
+        }
 
     def _get_default_account_state(self, overrides=None):
         account_state = merge_genesis_overrides(
@@ -686,7 +692,7 @@ class EELSBackend(BaseChainBackend):
                 )
                 log_index += 1
 
-            updated_receipt["type"] = updated_tx["type"]
+            # updated_receipt["type"] = updated_tx["type"]
 
             updated_receipt["blobGasUsed"] = int(block_header["blob_gas_used"])
 
@@ -768,7 +774,9 @@ class EELSBackend(BaseChainBackend):
 
         raise BlockNotFound(f"No block found for block hash: {block_hash}.")
 
-    def get_transaction_by_hash(self, transaction_hash):
+    def get_transaction_by_hash(
+        self, transaction_hash: RequestHexStr
+    ) -> "TransactionRPCResponse":
         if transaction_hash in self._transactions_map:
             return serialize_transaction(self._transactions_map[transaction_hash])
 
@@ -982,18 +990,10 @@ class EELSBackend(BaseChainBackend):
 
         return self._fork_module.check_transaction(*arguments)
 
-    def _get_normalized_and_unsigned_evm_transaction(self, transaction: Dict[str, Any]):
-        return normalize_transaction_fields(
-            transaction,
-            self.chain.chain_id,
-            self.get_nonce(transaction["from"]),
-            self.get_base_fee(),
-        )
-
     def _get_normalized_and_signed_evm_transaction(
-        self, transaction: Dict[str, Any]
+        self, transaction: "TransactionRequestObject"
     ) -> Any:
-        sender_address = transaction["from"]
+        sender_address = transaction.sender
         if sender_address not in self._key_lookup:
             raise ValidationError(
                 'No valid "from" key was provided in the transaction '
@@ -1001,20 +1001,9 @@ class EELSBackend(BaseChainBackend):
             )
 
         private_key = self._key_lookup[sender_address]
-        eth_tester_normalized_transaction = normalize_transaction_fields(
-            transaction,
-            int(self.chain.chain_id),
-            self.get_nonce(sender_address),
-            int(self.get_base_fee()),
-        )
 
         # EELS-specific normalization
-        eels_normalized_transaction = eels_normalize_transaction(
-            eth_tester_normalized_transaction
-        )
-        signed_transaction = self.sign_transaction(
-            eels_normalized_transaction, private_key
-        )
+        signed_transaction = self.sign_transaction(transaction.serialize(), private_key)
         return signed_transaction
 
     def sign_transaction(
@@ -1037,6 +1026,7 @@ class EELSBackend(BaseChainBackend):
             "0x0",
             "0x0",
         )
+
         tx = TransactionLoad(json_tx, self.fork).read()
 
         if isinstance(tx, bytes):
@@ -1108,13 +1098,15 @@ class EELSBackend(BaseChainBackend):
                 self,
                 raw_transaction,
             )
-            eels_transaction = self._transactions_module.BlobTransaction(**tx_dict)
+            eels_transaction = self._transactions_module.BlobTransactionRequest(
+                **tx_dict
+            )
         else:
             try:
                 eels_transaction = self.fork.decode_transaction(raw_transaction)
             except EthereumException:
                 eels_transaction = rlp.decode_to(
-                    self._transactions_module.LegacyTransaction, raw_transaction
+                    self._transactions_module.LegacyTransactionRequest, raw_transaction
                 )
 
         self._check_transaction(eels_transaction)
@@ -1129,8 +1121,7 @@ class EELSBackend(BaseChainBackend):
         return tx_hash
 
     def send_signed_transaction(self, signed_json_tx, block_number="pending"):
-        normalized = eels_normalize_transaction(signed_json_tx)
-        eels_transaction = TransactionLoad(normalized, self.fork).read()
+        eels_transaction = TransactionLoad(signed_json_tx, self.fork).read()
         self._check_transaction(eels_transaction)
 
         self._pending_block["transactions"].append(eels_transaction)
@@ -1140,12 +1131,12 @@ class EELSBackend(BaseChainBackend):
         )
         return tx_hash
 
-    def send_transaction(self, transaction: Dict[str, Any]) -> bytes:
+    def send_transaction(self, transaction: "TransactionRequestObject") -> bytes:
         if (
-            transaction.get("to") in (b"", "0x0", "0x00", None)
+            transaction.sender in (b"", "0x0", "0x00", None)
             and "gas" not in transaction
         ):
-            transaction["gas"] = self.estimate_gas(transaction)
+            transaction.gas = self.estimate_gas(transaction)
 
         signed_and_normalized_json_tx = self._get_normalized_and_signed_evm_transaction(
             transaction,
@@ -1156,24 +1147,19 @@ class EELSBackend(BaseChainBackend):
         pending_block_transactions = self._pending_block["transactions"]
         pending_block_transactions.append(eels_tx)
         tx_hash = self._get_tx_hash(eels_tx)
-        self._transactions_map[tx_hash] = serialize_eels_transaction_for_block(
-            self,
-            tx=eels_tx,
-            index=len(pending_block_transactions),
-            block_number=self._pending_block["header"]["number"],
-        )
+        self._transactions_map[tx_hash] = transaction.serialize()
         return tx_hash
 
     def estimate_gas(self, transaction, block_number="pending") -> int:
-        original_sender_address = transaction["from"]
+        original_sender_address = transaction.sender
         with self._state_context_manager(block_number, synthetic_state=True):
             try:
-                transaction["gas"] = self._max_available_gas()
+                transaction.gas = self._max_available_gas()
                 if original_sender_address not in self._key_lookup:
                     with self._transient_account_from_address(
                         original_sender_address
                     ) as transient_account_address:
-                        transaction["from"] = transient_account_address
+                        transaction.sender = transient_account_address
                         block_output = self._process_synthetic_transaction(transaction)
                 else:
                     block_output = self._process_synthetic_transaction(transaction)
@@ -1204,11 +1190,14 @@ class EELSBackend(BaseChainBackend):
 
     def call(self, transaction, block_number="pending"):
         with self._state_context_manager(block_number, synthetic_state=True):
-            transaction["gas"] = transaction.get("gas", MINIMUM_GAS_ESTIMATE)
-            # try:
-            tx_env, signed_evm_transaction = self._generate_transaction_env(transaction)
-            # except EthereumException as e:
-            #     raise TransactionFailed("Transaction failed to execute.") from e
+            transaction.gas = transaction.gas or MINIMUM_GAS_ESTIMATE
+            try:
+                # TODO: better error messages
+                tx_env, signed_evm_transaction = self._generate_transaction_env(
+                    transaction
+                )
+            except EthereumException as e:
+                raise TransactionFailed("Transaction failed to execute.") from e
             evm = self._run_message_against_evm(tx_env, signed_evm_transaction)
             return evm.output
 
@@ -1219,7 +1208,6 @@ class EELSBackend(BaseChainBackend):
         """
         Send withdrawal requests to the pending block.
         """
-        validate_inbound_withdrawals(withdrawals_list)
         for withdrawal in withdrawals_list:
             self._pending_block["withdrawals"].append(
                 self.fork.Withdrawal(

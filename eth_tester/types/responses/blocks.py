@@ -9,8 +9,8 @@ from eth_tester.types.responses.base import (
 )
 
 
-class ResponseBlock(ResponseModel):
-    """Represents a block response in the Ethereum tester."""
+class BlockHeaderResponse(ResponseModel):
+    """Represents a block header response object."""
 
     number: ResponseHexStr
     hash: ResponseHexStr
@@ -40,4 +40,4 @@ class ResponseBlock(ResponseModel):
     excess_blob_gas: ResponseHexStr
 
 
-BlockRPCResponse = SerializedModel[ResponseBlock]
+BlockRPCResponse = SerializedModel[BlockHeaderResponse]

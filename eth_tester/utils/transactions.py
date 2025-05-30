@@ -1,15 +1,12 @@
 from typing import (
-    Any,
-    Dict,
+    TYPE_CHECKING,
 )
 
 from eth_utils import (
-    to_dict,
     to_list,
 )
 
 from eth_tester.constants import (
-    DYNAMIC_FEE_TRANSACTION_PARAMS,
     DYNAMIC_FEE_TX_TYPE,
 )
 
@@ -30,6 +27,11 @@ VALID_TRANSACTION_PARAMS = [
     "s",
     "v",
 ]
+
+if TYPE_CHECKING:
+    from eth_tester.types.responses.blocks import (
+        BlockHeaderResponse,
+    )
 
 
 def extract_valid_transaction_params(transaction_params):
@@ -65,62 +67,6 @@ def extract_transaction_type(transaction):
         )
 
 
-@to_dict
-def normalize_transaction_fields(
-    transaction: Dict[str, Any],
-    chain_id: int,
-    from_nonce: int,
-    base_fee_per_gas: int,
-):
-    is_dynamic_fee_transaction = (
-        any(_ in transaction for _ in DYNAMIC_FEE_TRANSACTION_PARAMS)
-        or
-        # if no fee params exist, default to dynamic fee transaction:
-        not any(
-            _ in transaction for _ in DYNAMIC_FEE_TRANSACTION_PARAMS + ("gasPrice",)
-        )
-    )
-    is_typed_transaction = is_dynamic_fee_transaction or "accessList" in transaction
-
-    for key in transaction:
-        if key in ("from", "type"):
-            continue
-        if key == "v" and is_typed_transaction:
-            yield "yParity", transaction["v"]  # use y_parity for typed txns, internally
-            continue
-        yield key, transaction[key]
-
-    if "nonce" not in transaction:
-        yield "nonce", from_nonce or 0
-    if "data" not in transaction:
-        yield "data", b""
-    if "value" not in transaction:
-        yield "value", 0
-    if "to" not in transaction:
-        yield "to", b""
-
-    if is_dynamic_fee_transaction:
-        if not any(_ in transaction for _ in DYNAMIC_FEE_TRANSACTION_PARAMS):
-            yield "maxFeePerGas", 1 * 10**9
-            yield "maxPriorityFeePerGas", 1 * 10**9
-        elif (
-            "maxPriorityFeePerGas" in transaction and "maxFeePerGas" not in transaction
-        ):
-            yield (
-                "maxFeePerGas",
-                transaction["maxPriorityFeePerGas"] + 2 * base_fee_per_gas,
-            )
-    else:
-        yield "gasPrice", transaction.get("gasPrice", 1 * 10**9)
-
-    if is_typed_transaction:
-        # typed transaction
-        if "accessList" not in transaction:
-            yield "accessList", ()
-        if "chainId" not in transaction:
-            yield "chainId", chain_id
-
-
 @to_list
 def remove_matching_transaction_from_list(transaction_list, transaction):
     for tx in transaction_list:
@@ -131,9 +77,7 @@ def remove_matching_transaction_from_list(transaction_list, transaction):
             yield tx
 
 
-def calculate_effective_gas_price(
-    transaction: Dict[str, Any], block_header: Dict[str, Any]
-):
+def calculate_effective_gas_price(transaction, block_header: "BlockHeaderResponse"):
     transaction_type = int(extract_transaction_type(transaction), 16)
 
     if transaction_type < DYNAMIC_FEE_TX_TYPE:
@@ -144,8 +88,8 @@ def calculate_effective_gas_price(
         )
     else:
         if isinstance(transaction, dict):
-            max_fee = int(transaction["maxFeePerGas"])
-            max_priority_fee = int(transaction["maxPriorityFeePerGas"])
+            max_fee = int(transaction["maxFeePerGas"], 16)
+            max_priority_fee = int(transaction["maxPriorityFeePerGas"], 16)
         else:
             max_fee = int(transaction.max_fee_per_gas)
             max_priority_fee = int(transaction.max_priority_fee_per_gas)
