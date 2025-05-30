@@ -26,7 +26,12 @@ class RequestBlockIdentifier(RequestType):
     """
 
     _str_ids = {"latest", "earliest", "pending", "safe", "finalized"}
-    _schema = core_schema.str_schema()
+    _schema = core_schema.union_schema(
+        [
+            core_schema.str_schema(),
+            core_schema.int_schema(),
+        ],
+    )
     normalizer = normalize_block_id
 
     @classmethod

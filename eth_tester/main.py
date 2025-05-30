@@ -5,10 +5,9 @@ import operator
 import time
 from typing import (
     List,
-    Literal,
-    Optional,
 )
 
+from eth_tester.types.responses.blocks import ResponseBlock
 from eth_utils import (
     is_integer,
     is_same_address,
@@ -241,13 +240,13 @@ class EthereumTester:
 
     @validate_call(validate_return=True)
     def get_balance(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "pending"
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
     ) -> ResponseHexStr:
         return self.backend.get_balance(address, block_number)
 
     @validate_call(validate_return=True)
     def get_code(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "pending"
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
     ) -> ResponseHexStr:
         return self.backend.get_code(address, block_number)
 
@@ -256,13 +255,13 @@ class EthereumTester:
         self,
         address: RequestHexStr,
         slot: RequestHexInteger,
-        block_number: RequestBlockIdentifier = "pending",
+        block_number: RequestBlockIdentifier = "latest",
     ) -> ResponseHexStr:
         return self.backend.get_storage(address, slot, block_number)
 
     @validate_call(validate_return=True)
     def get_nonce(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "pending"
+        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
     ) -> ResponseHexStr:
         return self.backend.get_nonce(address, block_number)
 
@@ -316,17 +315,11 @@ class EthereumTester:
             )
             return transaction
 
+    @validate_call(validate_return=True)
     def get_block_by_number(
-        self, block_number=Optional[Literal["pending"]], full_transactions=False
-    ):
-        self.validator.validate_inbound_block_number(block_number)
-        raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_block = self.backend.get_block_by_number(
-            raw_block_number, full_transactions
-        )
-        self.validator.validate_outbound_block(raw_block)
-        block = self.normalizer.normalize_outbound_block(raw_block)
-        return block
+        self, block_number: RequestBlockIdentifier, full_transactions: bool = False
+    ) -> ResponseBlock:
+        return self.backend.get_block_by_number(block_number, full_transactions)
 
     def get_block_by_hash(self, block_hash, full_transactions=False):
         self.validator.validate_inbound_block_hash(block_hash)

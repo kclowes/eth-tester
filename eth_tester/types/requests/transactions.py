@@ -17,10 +17,12 @@ from pydantic_core import (
     core_schema,
 )
 
+from eth_tester.types.base import (
+    EthTesterBaseModel,
+)
 from eth_tester.types.requests.base import (
     RequestHexBytes,
     RequestHexInteger,
-    RequestModel,
     RequestType,
 )
 from eth_tester.validation.inbound import (
@@ -28,7 +30,7 @@ from eth_tester.validation.inbound import (
 )
 
 
-class RequestAccountAccessRequest(RequestType):
+class RequestAccountAccess(RequestType):
     """Account access type - an entry in an access list."""
 
     # TODO: fully implement this class
@@ -44,7 +46,7 @@ class RequestAccountAccessRequest(RequestType):
         }
 
 
-class SetCodeAuthorizationRequest(RequestType):
+class RequestSetCodeAuthorization(RequestType):
     """Set code authorization type."""
 
     _schema = core_schema.dict_schema(
@@ -54,34 +56,34 @@ class SetCodeAuthorizationRequest(RequestType):
 
 
 # -- transaction models -- #
-class BaseTransactionRequestModel(RequestModel):
+class BaseTransactionRequestModel(EthTesterBaseModel):
     """Base model for Ethereum transaction requests."""
 
-    chain_id: Optional[RequestHexInteger] = Field(default=None)
-    data: Optional[RequestHexBytes] = Field(default="0x")
-    nonce: Optional[RequestHexInteger] = Field(default=None)
-    gas: Optional[RequestHexInteger] = Field(default=None)
-    sender: RequestHexBytes = Field(alias="from")
-    to: RequestHexBytes = Field(default="0x0000000000000000000000000000000000000000")
-    value: Optional[RequestHexInteger] = Field(default="0x0")
+    chain_id: Optional["RequestHexInteger"] = Field(default=None)
+    data: Optional["RequestHexBytes"] = Field(default="0x")
+    nonce: Optional["RequestHexInteger"] = Field(default=None)
+    gas: Optional["RequestHexInteger"] = Field(default=None)
+    sender: "RequestHexBytes" = Field(alias="from")
+    to: "RequestHexBytes" = Field(default="0x0000000000000000000000000000000000000000")
+    value: Optional["RequestHexInteger"] = Field(default="0x0")
 
 
 class LegacyTransaction(BaseTransactionRequestModel):
     """Legacy transaction type."""
 
-    gas_price: Optional[RequestHexInteger]
-    type: Optional[RequestHexInteger] = Field(default="0x0")
+    gas_price: Optional["RequestHexInteger"]
+    type: Optional["RequestHexInteger"] = Field(default="0x0")
 
 
 class SignedLegacyTransactionRequest(LegacyTransaction):
-    r: RequestHexInteger
-    s: RequestHexInteger
-    v: RequestHexInteger
+    r: "RequestHexInteger"
+    s: "RequestHexInteger"
+    v: "RequestHexInteger"
 
     @property
     def signature(
         self,
-    ) -> Tuple[RequestHexInteger, RequestHexInteger, RequestHexInteger]:
+    ) -> Tuple["RequestHexInteger", "RequestHexInteger", "RequestHexInteger"]:
         return self.r, self.s, self.v
 
 
@@ -91,14 +93,14 @@ class SignedLegacyTransactionRequest(LegacyTransaction):
 class SignedTypedTransaction(BaseTransactionRequestModel):
     """Base model for signed typed transactions."""
 
-    r: RequestHexInteger
-    s: RequestHexInteger
-    y_parity: RequestHexInteger
+    r: "RequestHexInteger"
+    s: "RequestHexInteger"
+    y_parity: "RequestHexInteger"
 
     @property
     def signature(
         self,
-    ) -> Tuple[RequestHexInteger, RequestHexInteger, RequestHexInteger]:
+    ) -> Tuple["RequestHexInteger", "RequestHexInteger", "RequestHexInteger"]:
         return self.r, self.s, self.y_parity
 
 
@@ -106,9 +108,9 @@ class SignedTypedTransaction(BaseTransactionRequestModel):
 class AccessListTransaction(BaseTransactionRequestModel):
     """EIP-2930 access list transaction type."""
 
-    access_list: List[RequestAccountAccessRequest]
-    gas_price: RequestHexInteger
-    type: RequestHexInteger = Field(exclude=True, default="0x1")
+    access_list: List[RequestAccountAccess]
+    gas_price: "RequestHexInteger"
+    type: "RequestHexInteger" = Field(exclude=True, default="0x1")
 
 
 class SignedAccessListTransaction(SignedTypedTransaction, AccessListTransaction):
@@ -119,10 +121,10 @@ class SignedAccessListTransaction(SignedTypedTransaction, AccessListTransaction)
 class DynamicFeeTransaction(BaseTransactionRequestModel):
     """EIP-1559 dynamic fee transaction type."""
 
-    access_list: List[RequestAccountAccessRequest] = Field(default_factory=list)
-    max_fee_per_gas: Optional[RequestHexInteger] = None
-    max_priority_fee_per_gas: Optional[RequestHexInteger] = None
-    type: RequestHexInteger = Field(exclude=True, default="0x2")
+    access_list: List[RequestAccountAccess] = Field(default_factory=list)
+    max_fee_per_gas: Optional["RequestHexInteger"] = None
+    max_priority_fee_per_gas: Optional["RequestHexInteger"] = None
+    type: "RequestHexInteger" = Field(exclude=True, default="0x2")
 
 
 class SignedDynamicFeeTransaction(SignedTypedTransaction, DynamicFeeTransaction):
@@ -133,12 +135,12 @@ class SignedDynamicFeeTransaction(SignedTypedTransaction, DynamicFeeTransaction)
 class BlobTransaction(BaseTransactionRequestModel):
     """EIP-4844 blob transaction type."""
 
-    access_list: Optional[List[RequestAccountAccessRequest]] = None
-    blob_versioned_hashes: List[RequestHexBytes] = Field(default_factory=list)
-    max_fee_per_blob_gas: Optional[RequestHexInteger] = None
-    max_fee_per_gas: Optional[RequestHexInteger] = None
-    max_priority_fee_per_gas: Optional[RequestHexInteger] = None
-    type: RequestHexInteger = Field(exclude=True, default="0x3")
+    access_list: Optional[List[RequestAccountAccess]] = None
+    blob_versioned_hashes: List["RequestHexBytes"] = Field(default_factory=list)
+    max_fee_per_blob_gas: Optional["RequestHexInteger"] = None
+    max_fee_per_gas: Optional["RequestHexInteger"] = None
+    max_priority_fee_per_gas: Optional["RequestHexInteger"] = None
+    type: "RequestHexInteger" = Field(exclude=True, default="0x3")
 
 
 class SignedBlobTransaction(SignedTypedTransaction, BlobTransaction):
@@ -149,11 +151,11 @@ class SignedBlobTransaction(SignedTypedTransaction, BlobTransaction):
 class SetCodeTransaction(BaseTransactionRequestModel):
     """EIP-7702 set code transaction type."""
 
-    access_list: Optional[List[RequestAccountAccessRequest]] = None
-    authorization_list: List[SetCodeAuthorizationRequest] = Field(default_factory=list)
-    max_fee_per_gas: Optional[RequestHexInteger] = None
-    max_priority_fee_per_gas: Optional[RequestHexInteger] = None
-    type: RequestHexInteger = Field(exclude=True, default="0x4")
+    access_list: Optional[List[RequestAccountAccess]] = None
+    authorization_list: List[RequestSetCodeAuthorization] = Field(default_factory=list)
+    max_fee_per_gas: Optional["RequestHexInteger"] = None
+    max_priority_fee_per_gas: Optional["RequestHexInteger"] = None
+    type: "RequestHexInteger" = Field(exclude=True, default="0x4")
 
 
 class SignedSetCodeTransaction(SignedTypedTransaction, SetCodeTransaction):

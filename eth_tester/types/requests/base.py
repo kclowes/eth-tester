@@ -16,23 +16,15 @@ from functools import (
 from typing import (
     Any,
     Callable,
-    Dict,
     Final,
 )
 
 from eth_utils import (
-    CamelModel,
     is_hexstr,
     to_hex,
 )
 from eth_utils.functional import (
     identity,
-)
-from eth_utils.toolz import (
-    merge,
-)
-from pydantic import (
-    ConfigDict,
 )
 from pydantic_core import (
     core_schema,
@@ -71,17 +63,6 @@ BACKEND_SERIALIZER_CONFIG: Final = {
         bytes_serializer=to_hex,
     ),
 }
-
-
-# -- base models -- #
-class RequestModel(CamelModel):
-    model_config = ConfigDict(
-        **merge(CamelModel.model_config, {"populate_by_name": False})
-    )
-
-    def serialize(self) -> Dict[str, Any]:
-        """Serialize the model using the current backend context."""
-        return self.model_dump(by_alias=True)
 
 
 # -- base types -- #

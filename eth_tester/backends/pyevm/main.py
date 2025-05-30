@@ -1,6 +1,7 @@
 import os
 import time
 from typing import (
+    Any,
     Dict,
     List,
     Union,
@@ -543,8 +544,10 @@ class PyEVMBackend(BaseChainBackend):
     # Chain data
     #
     @replace_exceptions({EVMHeaderNotFound: BlockNotFound})
-    def get_block_by_number(self, block_number, full_transaction=True):
-        block = _get_block_by_number(self.chain, block_number)
+    def get_block_by_number(
+        self, block_identifier: RequestBlockIdentifier, full_transaction: bool = True
+    ) -> Dict[str, Any]:
+        block = _get_block_by_number(self.chain, block_identifier)
         is_pending = block.number == self.chain.get_block().number
         return serialize_block(block, full_transaction, is_pending)
 
