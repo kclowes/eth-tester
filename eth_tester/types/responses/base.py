@@ -1,5 +1,9 @@
 from typing import (
     Any,
+    Dict,
+    Generic,
+    TypeVar,
+    get_args,
 )
 
 from eth_utils import (
@@ -8,6 +12,32 @@ from eth_utils import (
 from pydantic_core import (
     core_schema,
 )
+
+from eth_tester.types.base import (
+    EthTesterBaseModel,
+)
+
+# -- base response models -- #
+
+T = TypeVar("T", bound=EthTesterBaseModel)
+
+
+class SerializedModel(Dict[str, Any], Generic[T]):
+    """Type for serialized models that preserves reference to source model type."""
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        # extract model type from SerializedModel[Model]
+        model_cls = get_args(source_type)[0]
+
+        def validate_and_serialize(v, _info):
+            return model_cls.model_validate(v).serialize()
+
+        return core_schema.with_info_before_validator_function(
+            validate_and_serialize,
+            core_schema.dict_schema(),
+            serialization=core_schema.to_string_ser_schema(),
+        )
 
 
 # -- base types -- #

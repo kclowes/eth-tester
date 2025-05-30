@@ -7,7 +7,6 @@ from typing import (
     List,
 )
 
-from eth_tester.types.responses.blocks import ResponseBlock
 from eth_utils import (
     is_integer,
     is_same_address,
@@ -54,6 +53,9 @@ from eth_tester.types.requests.transactions import (
 )
 from eth_tester.types.responses.base import (
     ResponseHexStr,
+)
+from eth_tester.types.responses.blocks import (
+    BlockRPCResponse,
 )
 from eth_tester.utils.accounts import (
     private_key_to_address,
@@ -318,7 +320,7 @@ class EthereumTester:
     @validate_call(validate_return=True)
     def get_block_by_number(
         self, block_number: RequestBlockIdentifier, full_transactions: bool = False
-    ) -> ResponseBlock:
+    ) -> BlockRPCResponse:
         return self.backend.get_block_by_number(block_number, full_transactions)
 
     def get_block_by_hash(self, block_hash, full_transactions=False):

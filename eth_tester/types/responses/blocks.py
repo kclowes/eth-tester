@@ -1,10 +1,13 @@
-from pydantic import Field
+from pydantic import (
+    Field,
+)
 
 from eth_tester.types.base import (
     EthTesterBaseModel,
 )
 from eth_tester.types.responses.base import (
     ResponseHexStr,
+    SerializedModel,
 )
 
 
@@ -37,3 +40,6 @@ class ResponseBlock(EthTesterBaseModel):
     parentBeaconBlockRoot: ResponseHexStr
     blobGasUsed: ResponseHexStr
     excessBlobGas: ResponseHexStr
+
+
+BlockRPCResponse = SerializedModel[ResponseBlock]
