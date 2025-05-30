@@ -7,19 +7,22 @@ from typing import (
 )
 
 from eth_utils import (
+    CamelModel,
     to_hex,
 )
 from pydantic_core import (
     core_schema,
 )
 
-from eth_tester.types.base import (
-    EthTesterBaseModel,
-)
-
 # -- base response models -- #
 
-T = TypeVar("T", bound=EthTesterBaseModel)
+
+class ResponseModel(CamelModel):
+    def serialize(self) -> Dict[str, Any]:
+        return self.model_dump(by_alias=True)
+
+
+T = TypeVar("T", bound=ResponseModel)
 
 
 class SerializedModel(Dict[str, Any], Generic[T]):

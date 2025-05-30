@@ -2,44 +2,42 @@ from pydantic import (
     Field,
 )
 
-from eth_tester.types.base import (
-    EthTesterBaseModel,
-)
 from eth_tester.types.responses.base import (
     ResponseHexStr,
+    ResponseModel,
     SerializedModel,
 )
 
 
-class ResponseBlock(EthTesterBaseModel):
+class ResponseBlock(ResponseModel):
     """Represents a block response in the Ethereum tester."""
 
     number: ResponseHexStr
     hash: ResponseHexStr
-    parentHash: ResponseHexStr
+    parent_hash: ResponseHexStr
     nonce: ResponseHexStr
-    sha3Uncles: ResponseHexStr
-    logsBloom: ResponseHexStr
-    transactionsRoot: ResponseHexStr
-    receiptsRoot: ResponseHexStr
-    stateRoot: ResponseHexStr
+    sha3_uncles: ResponseHexStr
+    logs_bloom: ResponseHexStr
+    transactions_root: ResponseHexStr
+    receipts_root: ResponseHexStr
+    state_root: ResponseHexStr
     coinbase: ResponseHexStr
     difficulty: ResponseHexStr
-    totalDifficulty: ResponseHexStr
-    mixHash: ResponseHexStr
+    total_difficulty: ResponseHexStr
+    mix_hash: ResponseHexStr
     size: ResponseHexStr
-    extraData: ResponseHexStr
-    gasLimit: ResponseHexStr
-    gasUsed: ResponseHexStr
+    extra_data: ResponseHexStr
+    gas_limit: ResponseHexStr
+    gas_used: ResponseHexStr
     timestamp: ResponseHexStr
     transactions: list[ResponseHexStr] = Field(default_factory=list)
     uncles: list[ResponseHexStr]
-    baseFeePerGas: ResponseHexStr
+    base_fee_per_gas: ResponseHexStr
     withdrawals: list[ResponseHexStr] = Field(default_factory=list)
-    withdrawalsRoot: ResponseHexStr
-    parentBeaconBlockRoot: ResponseHexStr
-    blobGasUsed: ResponseHexStr
-    excessBlobGas: ResponseHexStr
+    withdrawals_root: ResponseHexStr
+    parent_beacon_block_root: ResponseHexStr
+    blob_gas_used: ResponseHexStr
+    excess_blob_gas: ResponseHexStr
 
 
 BlockRPCResponse = SerializedModel[ResponseBlock]

@@ -17,12 +17,10 @@ from pydantic_core import (
     core_schema,
 )
 
-from eth_tester.types.base import (
-    EthTesterBaseModel,
-)
 from eth_tester.types.requests.base import (
     RequestHexBytes,
     RequestHexInteger,
+    RequestModel,
     RequestType,
 )
 from eth_tester.validation.inbound import (
@@ -56,7 +54,7 @@ class RequestSetCodeAuthorization(RequestType):
 
 
 # -- transaction models -- #
-class BaseTransactionRequestModel(EthTesterBaseModel):
+class BaseTransactionRequestModel(RequestModel):
     """Base model for Ethereum transaction requests."""
 
     chain_id: Optional["RequestHexInteger"] = Field(default=None)
