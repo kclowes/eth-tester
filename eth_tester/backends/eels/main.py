@@ -329,9 +329,7 @@ class EELSBackend(BaseChainBackend):
     #
     @property
     def _key_lookup(self):
-        return {
-            key.public_key.to_canonical_address(): key for key in self._account_keys
-        }
+        return {key.public_key.to_checksum_address(): key for key in self._account_keys}
 
     def _get_default_account_state(self, overrides=None):
         account_state = merge_genesis_overrides(
@@ -432,11 +430,10 @@ class EELSBackend(BaseChainBackend):
         else:
             yield
 
-    # TODO: move somewhere more appropriate
     def _build_block_env(self):
         block_env_args = dict(self._pending_block["header"])
-        block_env_args["time"] = block_env_args.pop("timestamp")
-        block_env_args["block_gas_limit"] = block_env_args.pop("gas_limit")
+        block_env_args["time"] = block_env_args.get("timestamp")
+        block_env_args["block_gas_limit"] = block_env_args.get("gas_limit")
 
         # remove any fields that are not in the fork's BlockEnvironment
         for prop in dict(block_env_args):
@@ -1094,7 +1091,9 @@ class EELSBackend(BaseChainBackend):
                 self,
                 raw_transaction,
             )
-            eels_transaction = self._transactions_module.BlobTransaction(**tx_dict)
+            eels_transaction = self._transactions_module.BlobTransaction(
+                **tx_dict
+            )
         else:
             try:
                 eels_transaction = self.fork.decode_transaction(raw_transaction)
@@ -1126,7 +1125,7 @@ class EELSBackend(BaseChainBackend):
         )
         return tx_hash
 
-    def send_transaction(self, transaction):
+    def send_transaction(self, transaction: Dict[str, Any]) -> bytes:
         if (
             transaction.get("to") in (b"", "0x0", "0x00", None)
             and "gas" not in transaction
@@ -1160,20 +1159,18 @@ class EELSBackend(BaseChainBackend):
                         original_sender_address
                     ) as transient_account_address:
                         transaction["from"] = transient_account_address
-                        output = self._process_synthetic_transaction(transaction)
+                        block_output = self._process_synthetic_transaction(transaction)
                 else:
-                    output = self._process_synthetic_transaction(transaction)
+                    block_output = self._process_synthetic_transaction(transaction)
             except EthereumException as e:
                 raise TransactionFailed("Transaction failed to execute.") from e
-        return int(output[0])  # gas consumed
+        return int(block_output.block_gas_used)
 
     def _process_synthetic_transaction(self, transaction: Dict[str, Any]):
         tx_env, signed_evm_transaction = self._generate_transaction_env(transaction)
         self._run_message_against_evm(tx_env, signed_evm_transaction)
 
         block_env = self._build_block_env()
-
-        # TODO: maybe this should be pulled from somewhere?
         block_output = self._vm_module.BlockOutput(
             block_gas_used=Uint(0),
             transactions_trie=self._trie_module.Trie(secured=False, default=None),
@@ -1182,24 +1179,21 @@ class EELSBackend(BaseChainBackend):
             withdrawals_trie=self._trie_module.Trie(secured=False, default=None),
             blob_gas_used=U64(0),
         )
-        output = self._fork_module.process_transaction(
+        self._fork_module.process_transaction(
             block_env=block_env,
             block_output=block_output,
             tx=signed_evm_transaction,
-            # TODO: where to find index?
             index=Uint(0),
         )
-        return output
+        return block_output
 
     def call(self, transaction, block_number="pending"):
         with self._state_context_manager(block_number, synthetic_state=True):
             transaction["gas"] = transaction.get("gas", MINIMUM_GAS_ESTIMATE)
-            try:
-                tx_env, signed_evm_transaction = self._generate_transaction_env(
-                    transaction
-                )
-            except EthereumException as e:
-                raise TransactionFailed("Transaction failed to execute.") from e
+            # try:
+            tx_env, signed_evm_transaction = self._generate_transaction_env(transaction)
+            # except EthereumException as e:
+            #     raise TransactionFailed("Transaction failed to execute.") from e
             evm = self._run_message_against_evm(tx_env, signed_evm_transaction)
             return evm.output
 
@@ -1319,15 +1313,15 @@ class EELSBackend(BaseChainBackend):
             self.chain.state, sender_address
         )
         acct = Account.create()
-        bytes_address = to_canonical_address(acct.address)
+        bytes_address = acct.address
         acct_pkey = KeyAPI.PrivateKey(acct.key)
         self._account_keys.append(acct_pkey)
         self.fork.set_account(self.chain.state, bytes_address, sender_address_account)
 
-        yield bytes_address
+        yield acct.address
 
         popped_key = self._account_keys.pop()
-        self.fork.destroy_account(self.chain.state, bytes_address)
+        self._fork_module.destroy_account(self.chain.state, bytes_address)
         if popped_key != acct_pkey:
             raise ValidationError("Account keys were not cleaned up properly.")
         assert (

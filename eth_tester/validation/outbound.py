@@ -1,7 +1,8 @@
+from typing import Optional
+
 from eth_utils import (
-    is_bytes,
     is_canonical_address,
-    is_integer,
+    is_hexstr,
     is_list_like,
 )
 from eth_utils.toolz import (
@@ -40,15 +41,19 @@ from .common import (
 )
 
 
-def validate_32_byte_string(value):
-    validate_bytes(value)
-    if len(value) != 32:
+def validate_hexstr(value, length: Optional[int] = None):
+    if not is_hexstr(value):
+        raise ValidationError(f"Value must be a hex string.  Got type: {type(value)}")
+    if length and len(value) != length:
+        # 0x + 32 bytes (64 hex chars)
         raise ValidationError(
-            f"Must be of length 32.  Got: {value} of length {len(value)}"
+            "Must be 32 byte hash represented as 0x-prefixed hex string of length 66.  "
+            f"Got: `{value}` of length `{len(value)}`"
         )
 
 
-validate_block_hash = validate_32_byte_string
+validate_32_byte_hexstr = partial(validate_hexstr, length=66)
+validate_20_byte_hexstr = partial(validate_hexstr, length=42)
 
 
 def validate_nonce(value):
@@ -80,12 +85,12 @@ LOG_ENTRY_VALIDATORS = {
     "type": validate_log_entry_type,
     "logIndex": validate_positive_integer,
     "transactionIndex": if_not_null(validate_positive_integer),
-    "transactionHash": validate_32_byte_string,
-    "blockHash": if_not_null(validate_32_byte_string),
-    "blockNumber": if_not_null(validate_positive_integer),
+    "transactionHash": validate_hexstr,
+    "blockHash": validate_hexstr,  # if_not_null(validate_32_byte_hash)
+    "blockNumber": validate_hexstr,  # if_not_null(validate_positive_integer)
     "address": validate_canonical_address,
     "data": validate_bytes,
-    "topics": partial(validate_array, validator=validate_32_byte_string),
+    "topics": partial(validate_array, validator=validate_32_byte_hexstr),
 }
 validate_log_entry = partial(validate_dict, key_validators=LOG_ENTRY_VALIDATORS)
 
@@ -116,37 +121,32 @@ def _validate_outbound_access_list(access_list):
             raise ValidationError(f"access_list entry not properly formatted: {entry}")
         address = entry[0]
         storage_keys = entry[1]
-        if not (is_bytes(address) and len(address) == 20):
-            raise ValidationError(
-                f"access_list address not properly formatted: {address}"
-            )
+        validate_20_byte_hexstr(address)
         if not is_list_like(storage_keys):
             raise ValidationError(
                 f"access_list storage keys are not list-like: {storage_keys}"
             )
-        if len(storage_keys) > 0 and (not all(is_integer(k) for k in storage_keys)):
-            raise ValidationError(
-                "one or more access list storage keys not formatted "
-                f"properly: {storage_keys}"
-            )
+        if len(storage_keys) > 0:
+            for k in storage_keys:
+                validate_32_byte_hexstr(k)
 
 
 LEGACY_TRANSACTION_VALIDATORS = {
-    "type": validate_transaction_type,
-    "hash": validate_32_byte_string,
-    "nonce": validate_uint256,
-    "blockHash": if_not_null(validate_32_byte_string),
-    "blockNumber": if_not_null(validate_positive_integer),
-    "transactionIndex": if_not_null(validate_positive_integer),
-    "from": validate_canonical_address,
-    "to": if_not_create_address(validate_canonical_address),
-    "value": validate_uint256,
-    "gas": validate_uint256,
-    "gasPrice": validate_uint256,
-    "data": validate_bytes,
-    "v": validate_signature_v,
-    "r": validate_uint256,
-    "s": validate_uint256,
+    "type": validate_hexstr,
+    "hash": validate_32_byte_hexstr,
+    "nonce": validate_hexstr,
+    "blockHash": if_not_null(validate_32_byte_hexstr),
+    "blockNumber": if_not_null(validate_hexstr),
+    "transactionIndex": if_not_null(validate_hexstr),
+    "from": validate_20_byte_hexstr,
+    "to": if_not_create_address(validate_20_byte_hexstr),
+    "value": validate_hexstr,
+    "gas": validate_hexstr,
+    "gasPrice": validate_hexstr,
+    "data": validate_hexstr,
+    "v": validate_hexstr,
+    "r": validate_hexstr,
+    "s": validate_hexstr,
 }
 validate_legacy_transaction = partial(
     validate_dict, key_validators=LEGACY_TRANSACTION_VALIDATORS
@@ -156,9 +156,9 @@ validate_legacy_transaction = partial(
 ACCESS_LIST_TRANSACTION_VALIDATORS = merge(
     LEGACY_TRANSACTION_VALIDATORS,
     {
-        "v": validate_y_parity,
-        "yParity": validate_y_parity,
-        "chainId": validate_uint256,
+        "v": validate_hexstr,
+        "yParity": validate_hexstr,
+        "chainId": validate_hexstr,
         "accessList": _validate_outbound_access_list,
     },
 )
@@ -169,8 +169,8 @@ validate_access_list_transaction = partial(
 DYNAMIC_FEE_TRANSACTION_VALIDATORS = merge(
     ACCESS_LIST_TRANSACTION_VALIDATORS,
     {
-        "maxFeePerGas": validate_uint256,
-        "maxPriorityFeePerGas": validate_uint256,
+        "maxFeePerGas": validate_hexstr,
+        "maxPriorityFeePerGas": validate_hexstr,
     },
 )
 validate_dynamic_fee_transaction = partial(
@@ -180,10 +180,10 @@ validate_dynamic_fee_transaction = partial(
 BLOB_TRANSACTION_VALIDATORS = merge(
     DYNAMIC_FEE_TRANSACTION_VALIDATORS,
     {
-        "maxFeePerBlobGas": validate_uint256,
+        "maxFeePerBlobGas": validate_hexstr,
         "blobVersionedHashes": partial(
             validate_array,
-            validator=validate_32_byte_string,
+            validator=validate_32_byte_hexstr,
         ),
     },
 )
@@ -203,10 +203,10 @@ validate_transaction = partial(
 
 
 WITHDRAWAL_VALIDATORS = {
-    "index": validate_uint64,
-    "validatorIndex": validate_uint64,
-    "address": validate_canonical_address,
-    "amount": validate_uint64,
+    "index": validate_hexstr,
+    "validatorIndex": validate_hexstr,
+    "address": validate_20_byte_hexstr,
+    "amount": validate_hexstr,
 }
 validate_withdrawal = partial(validate_dict, key_validators=WITHDRAWAL_VALIDATORS)
 
@@ -218,10 +218,10 @@ def validate_status(value):
 
 
 RECEIPT_VALIDATORS = {
-    "transactionHash": validate_32_byte_string,
+    "transactionHash": validate_hexstr,
     "transactionIndex": if_not_null(validate_positive_integer),
     "blockNumber": if_not_null(validate_positive_integer),
-    "blockHash": if_not_null(validate_32_byte_string),
+    "blockHash": if_not_null(validate_hexstr),
     "cumulativeGasUsed": validate_positive_integer,
     "effectiveGasPrice": if_not_null(validate_positive_integer),
     "from": validate_canonical_address,
@@ -253,34 +253,34 @@ validate_receipt = partial(
 
 BLOCK_VALIDATORS = {
     "number": validate_positive_integer,
-    "hash": validate_block_hash,
-    "parentHash": validate_block_hash,
+    "hash": validate_hexstr,
+    "parentHash": validate_hexstr,
     "nonce": validate_nonce,
-    "sha3Uncles": validate_32_byte_string,
+    "sha3Uncles": validate_hexstr,
     "logsBloom": validate_logs_bloom,
-    "transactionsRoot": validate_32_byte_string,
-    "receiptsRoot": validate_32_byte_string,
-    "stateRoot": validate_32_byte_string,
+    "transactionsRoot": validate_hexstr,
+    "receiptsRoot": validate_hexstr,
+    "stateRoot": validate_hexstr,
     "coinbase": validate_canonical_address,
     "difficulty": validate_positive_integer,
-    "mixHash": validate_32_byte_string,
+    "mixHash": validate_hexstr,
     "totalDifficulty": validate_positive_integer,
     "size": validate_positive_integer,
-    "extraData": validate_32_byte_string,
+    "extraData": validate_hexstr,
     "gasLimit": validate_positive_integer,
     "gasUsed": validate_positive_integer,
     "timestamp": validate_positive_integer,
     "transactions": partial(
         validate_any,
         validators=(
-            partial(validate_array, validator=validate_32_byte_string),
+            partial(validate_array, validator=validate_hexstr),
             partial(validate_array, validator=validate_legacy_transaction),
             partial(validate_array, validator=validate_access_list_transaction),
             partial(validate_array, validator=validate_dynamic_fee_transaction),
             partial(validate_array, validator=validate_blob_transactions),
         ),
     ),
-    "uncles": partial(validate_array, validator=validate_32_byte_string),
+    "uncles": partial(validate_array, validator=validate_hexstr),
     # fork-specific fields, validated separately in `_validate_fork_specific_fields()`
     # London fork:
     "baseFeePerGas": identity,
@@ -307,13 +307,13 @@ def _validate_fork_specific_fields(block):
 
     if is_shanghai_block(block):
         partial(validate_array, validator=validate_withdrawal)(block["withdrawals"])
-        validate_32_byte_string(block["withdrawalsRoot"])
+        validate_hexstr(block["withdrawalsRoot"])
     else:
         block["withdrawals"] = None
         block["withdrawalsRoot"] = None
 
     if is_cancun_block(block):
-        validate_32_byte_string(block["parentBeaconBlockRoot"])
+        validate_hexstr(block["parentBeaconBlockRoot"])
         validate_positive_integer(block["blobGasUsed"])
         validate_positive_integer(block["excessBlobGas"])
     else:

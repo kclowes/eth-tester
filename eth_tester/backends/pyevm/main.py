@@ -688,6 +688,7 @@ class PyEVMBackend(BaseChainBackend):
     def _get_normalized_and_signed_evm_transaction(
         self, transaction, block_number="latest"
     ):
+        import pdb; pdb.set_trace()
         if transaction["from"] not in self._key_lookup:
             raise ValidationError(
                 'No valid "from" key was provided in the transaction '

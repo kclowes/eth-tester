@@ -41,8 +41,8 @@ def eels_normalize_transaction(transaction: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in transaction.items():
         if key == "gas":
             key = "gas_limit"
-            value = hex(value)
-        elif isinstance(value, bytes):
+
+        if isinstance(value, bytes):
             value = value.hex()
         elif isinstance(value, int):
             value = hex(value)

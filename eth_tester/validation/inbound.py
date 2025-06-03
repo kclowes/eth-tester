@@ -352,25 +352,28 @@ def _validate_inbound_access_list(access_list):
     if not is_list_like(access_list):
         raise ValidationError("accessList is not list-like")
     for entry in access_list:
-        if not is_dict(entry) and len(entry) != 2:
-            raise ValidationError(f"accessList entry not properly formatted: {entry}")
-        address = entry.get("address")
-        storage_keys = entry.get("storageKeys")
-        if not is_hex_address(address):
-            raise ValidationError(
-                f"accessList address must be a hexadecimal address: {address}"
-            )
-        if not is_list_like(storage_keys):
-            raise ValidationError(
-                f"accessList storage keys are not list-like: {storage_keys}"
-            )
-        if len(storage_keys) > 0 and not all(
-            is_32byte_hex_string(k) for k in storage_keys
-        ):
-            raise ValidationError(
-                "one or more access list storage keys not formatted "
-                f"properly: {storage_keys}"
-            )
+        validate_account_access(entry)
+
+
+def validate_account_access(entry):
+    if not is_dict(entry) and len(entry) != 2:
+        raise ValidationError(f"accessList entry not properly formatted: {entry}")
+    address = entry.get("address")
+    storage_keys = entry.get("storageKeys")
+
+    if not is_hex_address(address):
+        raise ValidationError(
+            f"accessList address must be a hexadecimal address: {address}"
+        )
+    if not is_list_like(storage_keys):
+        raise ValidationError(
+            f"accessList storage keys are not list-like: {storage_keys}"
+        )
+    if len(storage_keys) > 0 and not all(is_32byte_hex_string(k) for k in storage_keys):
+        raise ValidationError(
+            "one or more access list storage keys not formatted "
+            f"properly: {storage_keys}"
+        )
 
 
 def validate_raw_transaction(raw_transaction):

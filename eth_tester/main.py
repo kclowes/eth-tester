@@ -5,8 +5,17 @@ import operator
 import time
 from typing import (
     List,
+    Literal,
+    Optional,
 )
 
+from pydantic import validate_call
+
+from eth_tester.types.requests.base import RequestHexBytes, RequestHexStr
+from eth_tester.types.requests.transactions import (
+    BlobTransaction, SignedTypedTransaction, TransactionRequestObject,
+)
+from eth_tester.validation.outbound import validate_hexstr
 from eth_typing import (
     HexAddress,
     HexStr,
@@ -40,9 +49,6 @@ from eth_tester.exceptions import (
     TransactionNotFound,
     ValidationError,
 )
-from eth_tester.normalization import (
-    get_normalizer_backend,
-)
 from eth_tester.utils.accounts import (
     private_key_to_address,
 )
@@ -73,7 +79,6 @@ def handle_auto_mining(func):
     def func_wrapper(self, *args, **kwargs):
         if self.auto_mine_transactions:
             transaction_hash = func(self, *args, **kwargs)
-            # breakpoint()
             self.mine_block()
         else:
             snapshot = self.take_snapshot()
@@ -115,21 +120,11 @@ class EthereumTester:
 
     auto_mine_transactions = None
 
-    def __init__(
-        self, backend=None, validator=None, normalizer=None, auto_mine_transactions=True
-    ):
+    def __init__(self, backend=None, auto_mine_transactions=True):
         if backend is None:
             backend = get_chain_backend()
 
-        if validator is None:
-            validator = get_validator()
-
-        if normalizer is None:
-            normalizer = get_normalizer_backend()
-
         self.backend = backend
-        self.validator = validator
-        self.normalizer = normalizer
         self.chain_id = lambda: int(self.backend.chain.chain_id)
 
         self.auto_mine_transactions = auto_mine_transactions
@@ -173,7 +168,6 @@ class EthereumTester:
         self.validator.validate_inbound_timestamp(to_timestamp)
         # make sure we are not traveling back in time as this is not possible.
         current_timestamp = self.get_block_by_number("pending")["timestamp"]
-        # breakpoint()
         if to_timestamp == current_timestamp:
             # no change, return immediately
             return
@@ -190,9 +184,7 @@ class EthereumTester:
     #
     def get_accounts(self):
         raw_accounts = self.backend.get_accounts()
-        self.validator.validate_outbound_accounts(raw_accounts)
-        accounts = self.normalizer.normalize_outbound_account_list(raw_accounts)
-        return accounts
+        return raw_accounts
 
     def add_account(self, private_key, password=None):
         # TODO: validation
@@ -311,7 +303,9 @@ class EthereumTester:
             )
         return pending_transaction
 
-    def _get_pending_transaction_by_hash(self, transaction_hash):
+    def _get_pending_transaction_by_hash(self, transaction_hash: RequestHexBytes):
+        # TODO: How to normalize single fields with pydantic?
+
         for transaction in self._pending_transactions:
             if transaction["hash"] == transaction_hash:
                 return transaction
@@ -319,8 +313,7 @@ class EthereumTester:
             f"No transaction found for transaction hash: {transaction_hash}"
         )
 
-    def get_transaction_by_hash(self, transaction_hash):
-        self.validator.validate_inbound_transaction_hash(transaction_hash)
+    def get_transaction_by_hash(self, transaction_hash: RequestHexBytes):
         try:
             pending_transaction = self._get_pending_transaction_by_hash(
                 transaction_hash
@@ -337,7 +330,9 @@ class EthereumTester:
             )
             return transaction
 
-    def get_block_by_number(self, block_number="pending", full_transactions=False):
+    def get_block_by_number(
+        self, block_number=Optional[Literal["pending"]], full_transactions=False
+    ):
         self.validator.validate_inbound_block_number(block_number)
         raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
         raw_block = self.backend.get_block_by_number(
@@ -430,7 +425,6 @@ class EthereumTester:
 
     def mine_block(self, coinbase=ZERO_ADDRESS_HEX):
         self.validator.validate_inbound_account(coinbase)
-        # breakpoint()
         block_hash = self.mine_blocks(1, coinbase=coinbase)[0]
         return block_hash
 
@@ -505,30 +499,18 @@ class EthereumTester:
         return result
 
     def estimate_gas(self, transaction, block_number="pending"):
-        self.validator.validate_inbound_transaction(
-            transaction, txn_internal_type="estimate"
-        )
-        raw_transaction = self.normalizer.normalize_inbound_transaction(transaction)
-        self.validator.validate_inbound_block_number(block_number)
         raw_block_number = self.normalizer.normalize_inbound_block_number(block_number)
-        raw_gas_estimate = self.backend.estimate_gas(raw_transaction, raw_block_number)
-        self.validator.validate_outbound_gas_estimate(raw_gas_estimate)
-        gas_estimate = self.normalizer.normalize_outbound_gas_estimate(raw_gas_estimate)
+        gas_estimate = self.backend.estimate_gas(transaction, raw_block_number)
         return gas_estimate
 
     #
     # Private Transaction API
     #
-    def _add_transaction_to_pending_block(self, transaction, txn_internal_type="send"):
-        self.validator.validate_inbound_transaction(
-            transaction, txn_internal_type=txn_internal_type
-        )
-        raw_transaction = self.normalizer.normalize_inbound_transaction(transaction)
-
-        # breakpoint()
-        if raw_transaction["from"] in self._account_passwords:
-            unlocked_until = self._account_unlock[raw_transaction["from"]]
-            account_password = self._account_passwords[raw_transaction["from"]]
+    @validate_call
+    def _add_transaction_to_pending_block(self, transaction: TransactionRequestObject):
+        if transaction.sender in self._account_passwords:
+            unlocked_until = self._account_unlock[transaction.sender]
+            account_password = self._account_passwords[transaction.sender]
             is_locked = (
                 account_password is not None
                 and unlocked_until is not None
@@ -537,23 +519,15 @@ class EthereumTester:
             if is_locked:
                 raise AccountLocked("The account is currently locked")
 
-        if {"r", "s", "v"}.issubset(transaction.keys()):
-            try:
-                raw_transaction_hash = self.backend.send_signed_transaction(
-                    raw_transaction
-                )
-            except NotImplementedError:
-                unsigned_transaction = dissoc(raw_transaction, "r", "s", "v")
-                raw_transaction_hash = self.backend.send_transaction(
-                    unsigned_transaction
-                )
+        if isinstance(transaction, SignedTypedTransaction):
+            raw_transaction_hash = self.backend.send_signed_transaction(transaction)
         else:
-            raw_transaction_hash = self.backend.send_transaction(raw_transaction)
+            raw_transaction_hash = self.backend.send_transaction(transaction)
 
-        self.validator.validate_outbound_transaction_hash(raw_transaction_hash)
         transaction_hash = self.normalizer.normalize_outbound_transaction_hash(
             raw_transaction_hash,
         )
+        validate_hexstr(transaction_hash)
 
         self._handle_pending_tx_filtering(transaction_hash)
         return transaction_hash
@@ -706,7 +680,6 @@ class EthereumTester:
 
     @to_tuple
     def get_only_filter_changes(self, filter_id):
-        self.validator.validate_inbound_filter_id(filter_id)
         raw_filter_id = self.normalizer.normalize_inbound_filter_id(filter_id)
 
         if raw_filter_id in self._block_filters:

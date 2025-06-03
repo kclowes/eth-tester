@@ -1,5 +1,5 @@
 from eth_tester.normalization.inbound import (
-    _normalize_inbound_access_list,
+    normalize_inbound_access_list,
 )
 
 
@@ -29,4 +29,4 @@ def test_inbound_access_list_normalization():
         ),
         (b"\x00" * 20, (1234567890,)),
     )
-    assert _normalize_inbound_access_list(inbound_access_list) == expected
+    assert normalize_inbound_access_list(inbound_access_list) == expected
