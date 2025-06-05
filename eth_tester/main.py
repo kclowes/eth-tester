@@ -111,10 +111,7 @@ def handle_auto_block_inclusion(func):
     def _clean_pending_transaction(pending_transaction):
         cleaned_transaction = dissoc(pending_transaction, "type")
 
-        # TODO: Sometime in 2022 the inclusion of gasPrice may be removed from
-        #  dynamic fee transactions and we can get rid of this behavior.
-        #  https://github.com/ethereum/execution-specs/pull/251
-        #  remove gasPrice for dynamic fee transactions
+        # see: https://github.com/ethereum/execution-specs/pull/251
         if "gasPrice" and "maxFeePerGas" in pending_transaction:
             cleaned_transaction = dissoc(cleaned_transaction, "gasPrice")
 
@@ -257,19 +254,15 @@ class EthereumTester:
         _type = extract_transaction_type(pending_transaction)
         pending_transaction = assoc(pending_transaction, "type", _type)
 
-        # TODO: Sometime in 2022 the inclusion of gasPrice may be removed from
-        #  dynamic fee transactions and we can get rid of this behavior.
-        #  https://github.com/ethereum/execution-specs/pull/251
-        #  add gasPrice = maxFeePerGas to pending dynamic fee transactions
-        if _type == "0x2":
+        # see: https://github.com/ethereum/execution-specs/pull/251
+        int_type = int(_type, 16)
+        if int_type >= 2:
             pending_transaction = assoc(
                 pending_transaction, "gasPrice", pending_transaction["maxFeePerGas"]
             )
         return pending_transaction
 
     def _get_pending_transaction_by_hash(self, transaction_hash: RequestHexBytes):
-        # TODO: How to normalize single fields with pydantic?
-
         for transaction in self._pending_transactions:
             if transaction["hash"] == transaction_hash:
                 return transaction
@@ -286,7 +279,7 @@ class EthereumTester:
         """
         Fill in default values for transaction parameters if not specified.
         """
-        default_max_fee = 1 * 10**9
+        default_max_fee = 10**9
 
         is_dynamic_fee_transaction = isinstance(
             transaction,
@@ -355,7 +348,10 @@ class EthereumTester:
         return self.backend.get_transaction_receipt(transaction_hash)
 
     def get_fee_history(
-        self, block_count=1, newest_block="latest", reward_percentiles: List[int] = ()
+        self,
+        block_count=1,
+        newest_block: RequestBlockIdentifier = "latest",
+        reward_percentiles: List[int] = (),
     ):
         fee_history = self.backend.get_fee_history(
             block_count, newest_block, reward_percentiles
