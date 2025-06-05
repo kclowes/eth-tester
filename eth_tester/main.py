@@ -1,8 +1,6 @@
-import collections
 import functools
 import itertools
 import operator
-import time
 from typing import (
     List,
 )
@@ -33,7 +31,6 @@ from eth_tester.constants import (
     ZERO_ADDRESS_HEX,
 )
 from eth_tester.exceptions import (
-    AccountLocked,
     BlockNotFound,
     FilterNotFound,
     SnapshotNotFound,
@@ -143,7 +140,6 @@ class EthereumTester:
     _snapshot_counter = None
     _snapshots = None
     _account_passwords = None
-    _account_unlock = None
 
     def _reset_local_state(self):
         # filter tracking
@@ -158,7 +154,6 @@ class EthereumTester:
 
         # raw accounts
         self._account_passwords = {}
-        self._account_unlock = collections.defaultdict(bool)
 
     # -- time traveling -- #
     def time_travel(self, to_timestamp):
@@ -189,33 +184,6 @@ class EthereumTester:
         self.backend.add_account(private_key)
         self._account_passwords[account] = password
         return account
-
-    def unlock_account(self, account, password, unlock_seconds=None):
-        try:
-            account_password = self._account_passwords[account]
-        except KeyError:
-            raise ValidationError("Unknown account")
-
-        if account_password is None:
-            raise ValidationError("Account does not have a password")
-
-        if account_password != password:
-            raise ValidationError("Wrong password")
-
-        if unlock_seconds is None:
-            unlock_until = None
-        else:
-            unlock_until = time.time() + unlock_seconds
-
-        self._account_unlock[account] = unlock_until
-
-    def lock_account(self, account):
-        if account not in self._account_passwords:
-            raise ValidationError("Unknown account")
-        elif self._account_passwords[account] is None:
-            raise ValidationError("Account does not have a password")
-
-        self._account_unlock[account] = False
 
     @validate_call(validate_return=True)
     def get_balance(
@@ -477,17 +445,6 @@ class EthereumTester:
 
     # -- private transaction API -- #
     def _add_transaction_to_pending_block(self, transaction: TransactionRequestObject):
-        if transaction.sender in self._account_passwords:
-            unlocked_until = self._account_unlock[transaction.sender]
-            account_password = self._account_passwords[transaction.sender]
-            is_locked = (
-                account_password is not None
-                and unlocked_until is not None
-                and (unlocked_until is False or time.time() > unlocked_until)
-            )
-            if is_locked:
-                raise AccountLocked("The account is currently locked")
-
         if isinstance(transaction, SignedTypedTransactionRequest):
             tx_hash = self.backend.send_signed_transaction(transaction)
         else:

@@ -691,8 +691,6 @@ class EELSBackend(BaseChainBackend):
                 )
                 log_index += 1
 
-            # updated_receipt["type"] = updated_tx["type"]
-
             updated_receipt["blobGasUsed"] = int(block_header["blob_gas_used"])
 
             blob_gas_price = self._vm_module.gas.calculate_blob_gas_price(

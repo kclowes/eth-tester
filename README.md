@@ -256,44 +256,6 @@ as the second parameter.
 '0xdc544d1aa88ff8bbd2f2aec754b1f1e99e1812fd'
 ```
 
-<a id="api-unlock_account"></a>
-
-#### `EthereumTester.unlock_account(account, password, unlock_seconds=None)`
-
-Unlocks the given account if the provided password matches.
-
-Raises a `ValidationError` if:
-
-- The account is not known.
-- The password does not match.
-- The account was created without a password.
-
-```python
->>> t.unlock_account('0xdc544d1aa88ff8bbd2f2aec754b1f1e99e1812fd', 'my-secret')
-```
-
-By default, accounts will be unlocked indefinitely.  You can however unlock an
-account for a specified amount of time by providing the desired duration in
-seconds.
-
-```python
-# unlock for 1 hour.
->>> t.unlock_account('0xdc544d1aa88ff8bbd2f2aec754b1f1e99e1812fd', 'my-secret', 60 * 60)
-```
-
-<a id="api-lock_account"></a>
-
-#### `EthereumTester.lock_account(account)`
-
-Locks the provided account.
-
-Raises a `ValidationError` if:
-
-- The account is not known
-- The account does not have a password.
-
-<a id="api-get_balance"></a>
-
 #### `EthereumTester.get_balance(account) -> integer`
 
 Returns the balance, in wei, for the provided account.

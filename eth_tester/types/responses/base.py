@@ -2,6 +2,7 @@ from typing import (
     Any,
     Dict,
     Generic,
+    Optional,
     TypeVar,
     get_args,
 )
@@ -18,11 +19,24 @@ from pydantic_core import (
 
 
 class ResponseModel(CamelModel):
+    _include_if_none: Optional[set[str]] = None
+
     model_config = CamelModel.model_config.copy()
     model_config.update(extra="forbid")
 
     def serialize(self) -> Dict[str, Any]:
-        return self.model_dump(by_alias=True, exclude_none=True, exclude_unset=True)
+        serialized = self.model_dump(by_alias=True, exclude_none=True)
+
+        force_include = self._include_if_none or set()
+        result: Dict[str, Any] = {}
+        for field_name, field_info in self.model_fields.items():
+            key = field_info.alias if field_info.alias else field_name
+
+            if key in serialized or field_name in force_include:
+                # force-include ``_include_if_none`` fields when serializing
+                result[key] = serialized.get(key, None)
+
+        return result
 
 
 T = TypeVar("T", bound=ResponseModel)
@@ -56,10 +70,10 @@ class ResponseHexStr(str):
     """
 
     @classmethod
-    def _fill_model(cls, v) -> str:
+    def _fill_model(cls, v) -> Optional[str]:
         if isinstance(v, str):
             return to_hex(hexstr=v)
-        return to_hex(v)
+        return to_hex(v) if v else None
 
     @classmethod
     def __get_pydantic_core_schema__(

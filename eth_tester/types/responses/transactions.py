@@ -264,23 +264,24 @@ TransactionRPCResponse = Annotated[
 class TransactionReceiptResponse(ResponseModel):
     """Transaction receipt response model."""
 
-    sender: "ResponseHexStr" = Field(alias="from")
-    to: "ResponseHexStr" = Field(required=True)
-    transaction_hash: "ResponseHexStr"
-    transaction_index: "ResponseHexStr"
+    _include_if_none = {"contract_address"}
+
     block_hash: "ResponseHexStr"
     block_number: "ResponseHexStr"
+    contract_address: Optional["ResponseHexStr"] = None
     cumulative_gas_used: "ResponseHexStr"
+    sender: "ResponseHexStr" = Field(alias="from")
     gas_used: "ResponseHexStr"
-    contract_address: Optional["ResponseHexStr"]
-    logs: List[Dict[str, Any]] = Field(default_factory=list)
-    status: Optional["ResponseHexStr"]
-    state_root: "ResponseHexStr"
-    type: Optional["ResponseHexStr"] = None
-    effective_gas_price: Optional["ResponseHexStr"]
-    excess_blob_gas: Optional["ResponseHexStr"] = None
-    blob_gas_price: Optional["ResponseHexStr"] = None
     blob_gas_used: Optional["ResponseHexStr"] = None
+    effective_gas_price: "ResponseHexStr"
+    blob_gas_price: Optional["ResponseHexStr"] = None
+    logs: List[Dict[str, Any]] = Field(default_factory=list)
+    # logs_bloom: "ResponseHexStr"
+    status: Optional["ResponseHexStr"]
+    to: "ResponseHexStr"
+    transaction_hash: "ResponseHexStr"
+    transaction_index: "ResponseHexStr"
+    state_root: "ResponseHexStr"  # not in specs but geth maybe returns it?
 
 
 TxReceiptRPCResponse = SerializedModel[TransactionReceiptResponse]

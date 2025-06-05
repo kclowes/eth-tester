@@ -203,14 +203,6 @@ class BaseTestBackendDirect:
         with pytest.raises(AccountLocked):
             self._send_and_check_transaction(eth_tester, SIMPLE_TRANSACTION, account)
 
-        eth_tester.unlock_account(account, "test-password")
-        self._send_and_check_transaction(eth_tester, SIMPLE_TRANSACTION, account)
-
-        eth_tester.lock_account(account)
-
-        with pytest.raises(AccountLocked):
-            self._send_and_check_transaction(eth_tester, SIMPLE_TRANSACTION, account)
-
     def test_get_balance_of_listed_accounts(self, eth_tester):
         for account in eth_tester.get_accounts():
             balance = eth_tester.get_balance(account)

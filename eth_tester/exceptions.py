@@ -22,10 +22,6 @@ class UnknownFork(Exception):
     pass
 
 
-class AccountLocked(Exception):
-    pass
-
-
 class TransactionFailed(Exception):
     pass
 
