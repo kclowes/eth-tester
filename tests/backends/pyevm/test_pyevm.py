@@ -387,7 +387,7 @@ class TestPyEVMBackendDirect(BaseTestBackendDirect):
         assert genesis_block["nonce"] == encode_hex(GENESIS_NONCE)
         assert genesis_block["mixHash"] == encode_hex(GENESIS_MIX_HASH)
 
-        tester.mine_blocks(3)
+        tester.include_blocks(3)
 
         # assert smooth transition to PoS with expected values
         third_block = tester.get_block_by_number(3)

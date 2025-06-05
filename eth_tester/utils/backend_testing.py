@@ -302,7 +302,7 @@ class BaseTestBackendDirect:
         self.skip_if_no_evm_execution()
         self.skip_if_eels_execution()
 
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         fee_history = eth_tester.get_fee_history(
             block_count, newest_block, reward_percentiles
         )
@@ -336,7 +336,7 @@ class BaseTestBackendDirect:
     ):
         self.skip_if_no_evm_execution()
         self.skip_if_eels_execution()
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
 
         with pytest.raises(error, match=message):
             eth_tester.get_fee_history(block_count, newest_block, reward_percentiles)
@@ -345,27 +345,27 @@ class BaseTestBackendDirect:
     # Mining
     #
     def test_mine_block_single(self, eth_tester):
-        eth_tester.mine_blocks()
+        eth_tester.include_blocks()
         before_block_number = eth_tester.get_block_by_number("latest")["number"]
-        eth_tester.mine_blocks()
+        eth_tester.include_blocks()
         after_block_number = eth_tester.get_block_by_number("latest")["number"]
         assert is_integer(before_block_number)
         assert is_integer(after_block_number)
         assert before_block_number == after_block_number - 1
 
     def test_mine_multiple_blocks(self, eth_tester):
-        eth_tester.mine_blocks()
+        eth_tester.include_blocks()
         before_block_number = eth_tester.get_block_by_number("latest")["number"]
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         after_block_number = eth_tester.get_block_by_number("latest")["number"]
         assert is_integer(before_block_number)
         assert is_integer(after_block_number)
         assert before_block_number == after_block_number - 10
 
     def test_gas_limit_constant(self, eth_tester):
-        eth_tester.mine_blocks()
+        eth_tester.include_blocks()
         before_gas_limit = eth_tester.get_block_by_number("latest")["gasLimit"]
-        eth_tester.mine_blocks()
+        eth_tester.include_blocks()
         after_gas_limit = eth_tester.get_block_by_number("latest")["gasLimit"]
         assert before_gas_limit == after_gas_limit
 
@@ -392,7 +392,7 @@ class BaseTestBackendDirect:
 
         transaction_hex = "0xf86580843b9aca008252089419e7e376e7c213b7e7e7e46cc70a5dd086daff2a820539801ba0b101c1f9dc0c588c0194a1093f06e6b30d1fd16d31014ef5851311b7bfbf419ea01cfa8757b7863a630ef7491c62b03d9cd9dff395f61b5df500cc665f0fa5b027"  # noqa: E501
         if is_pending:
-            eth_tester.disable_auto_mine_transactions()
+            eth_tester.disable_auto_transactions_inclusion()
 
         transaction_hash = eth_tester.send_raw_transaction(transaction_hex)
 
@@ -400,7 +400,7 @@ class BaseTestBackendDirect:
             with pytest.raises(TransactionNotFound):
                 eth_tester.get_transaction_receipt(transaction_hash)
 
-            eth_tester.enable_auto_mine_transactions()
+            eth_tester.enable_auto_transaction_inclusion()
 
         else:
             # TODO if the else is removed and this block de-indented, pyevm will still
@@ -566,8 +566,8 @@ class BaseTestBackendDirect:
         self._check_transactions(dynamic_fee_transaction, txn)
 
     def test_block_number_auto_mine_transactions_enabled(self, eth_tester):
-        eth_tester.mine_blocks()
-        eth_tester.enable_auto_mine_transactions()
+        eth_tester.include_blocks()
+        eth_tester.enable_auto_transaction_inclusion()
         before_block_number = eth_tester.get_block_by_number("latest")["number"]
         eth_tester.send_transaction(
             {
@@ -580,8 +580,8 @@ class BaseTestBackendDirect:
         assert before_block_number == after_block_number - 1
 
     def test_auto_mine_transactions_disabled_block_number(self, eth_tester):
-        eth_tester.mine_blocks()
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.include_blocks()
+        eth_tester.disable_auto_transactions_inclusion()
         before_block_number = eth_tester.get_block_by_number("latest")["number"]
         eth_tester.send_transaction(
             {
@@ -594,8 +594,8 @@ class BaseTestBackendDirect:
         assert before_block_number == after_block_number
 
     def test_auto_mine_transactions_disabled_replace_transaction(self, eth_tester):
-        eth_tester.mine_blocks()
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.include_blocks()
+        eth_tester.disable_auto_transactions_inclusion()
         transaction = {
             "from": eth_tester.get_accounts()[0],
             "to": BURN_ADDRESS,
@@ -611,8 +611,8 @@ class BaseTestBackendDirect:
             pytest.fail("Sending replacement transaction caused exception")
 
     def test_auto_mine_transactions_disabled_multiple_accounts(self, eth_tester):
-        eth_tester.mine_blocks()
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.include_blocks()
+        eth_tester.disable_auto_transactions_inclusion()
 
         tx1 = eth_tester.send_transaction(
             {
@@ -659,8 +659,8 @@ class BaseTestBackendDirect:
         self, eth_tester
     ):
         self.skip_if_no_evm_execution()
-        eth_tester.mine_blocks()
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.include_blocks()
+        eth_tester.disable_auto_transactions_inclusion()
 
         tx1 = eth_tester.send_transaction(
             {
@@ -689,7 +689,7 @@ class BaseTestBackendDirect:
                 "nonce": 0,
             }
         )
-        sent_transactions = eth_tester.enable_auto_mine_transactions()
+        sent_transactions = eth_tester.enable_auto_transaction_inclusion()
         assert sent_transactions == [tx1, tx2_replacement]
 
     @pytest.mark.parametrize(
@@ -712,8 +712,8 @@ class BaseTestBackendDirect:
         complete_transaction = assoc(test_transaction, "from", accounts[0])
 
         self.skip_if_no_evm_execution()
-        eth_tester.mine_blocks()
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.include_blocks()
+        eth_tester.disable_auto_transactions_inclusion()
 
         txn_hash = eth_tester.send_transaction(complete_transaction)
 
@@ -723,7 +723,7 @@ class BaseTestBackendDirect:
         pending_transaction = eth_tester.get_transaction_by_hash(txn_hash)
         self._check_transactions(complete_transaction, pending_transaction)
 
-        eth_tester.mine_block()
+        eth_tester.include_block()
 
         receipt = eth_tester.get_transaction_receipt(txn_hash)
         assert receipt["transactionHash"] == txn_hash
@@ -748,7 +748,7 @@ class BaseTestBackendDirect:
 
     def test_get_block_by_number(self, eth_tester):
         origin_block_number = eth_tester.get_block_by_number("pending")["number"]
-        mined_block_hashes = eth_tester.mine_blocks(10)
+        mined_block_hashes = eth_tester.include_blocks(10)
         for offset, block_hash in enumerate(mined_block_hashes):
             block_number = origin_block_number + offset
             block = eth_tester.get_block_by_number(block_number)
@@ -757,7 +757,7 @@ class BaseTestBackendDirect:
             _validate_serialized_block(block)
 
     def test_get_block_by_number_full_transactions(self, eth_tester):
-        eth_tester.mine_blocks(2)
+        eth_tester.include_blocks(2)
         transaction_hash = eth_tester.send_transaction(
             {
                 "from": eth_tester.get_accounts()[0],
@@ -773,7 +773,7 @@ class BaseTestBackendDirect:
         assert is_dict(block["transactions"][0])
 
     def test_get_block_by_number_only_transaction_hashes(self, eth_tester):
-        eth_tester.mine_blocks(2)
+        eth_tester.include_blocks(2)
         transaction_hash = eth_tester.send_transaction(
             {
                 "from": eth_tester.get_accounts()[0],
@@ -791,7 +791,7 @@ class BaseTestBackendDirect:
     def test_get_block_by_hash(self, eth_tester):
         origin_block_number = eth_tester.get_block_by_number("pending")["number"]
 
-        mined_block_hashes = eth_tester.mine_blocks(10)
+        mined_block_hashes = eth_tester.include_blocks(10)
         for offset, block_hash in enumerate(mined_block_hashes):
             block_number = origin_block_number + offset
             block = eth_tester.get_block_by_hash(block_hash)
@@ -799,7 +799,7 @@ class BaseTestBackendDirect:
             assert block["hash"] == block_hash
 
     def test_get_block_by_hash_full_transactions(self, eth_tester):
-        eth_tester.mine_blocks(2)
+        eth_tester.include_blocks(2)
         transaction_hash = eth_tester.send_transaction(
             {
                 "from": eth_tester.get_accounts()[0],
@@ -815,7 +815,7 @@ class BaseTestBackendDirect:
         assert is_dict(block["transactions"][0])
 
     def test_get_block_by_hash_only_transaction_hashes(self, eth_tester):
-        eth_tester.mine_blocks(2)
+        eth_tester.include_blocks(2)
         transaction_hash = eth_tester.send_transaction(
             {
                 "from": eth_tester.get_accounts()[0],
@@ -831,7 +831,7 @@ class BaseTestBackendDirect:
         assert is_hex(block["transactions"][0])
 
     def test_get_block_by_earliest(self, eth_tester):
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         block = eth_tester.get_block_by_number("earliest")
         assert block["number"] == 0
 
@@ -846,14 +846,14 @@ class BaseTestBackendDirect:
     def test_get_block_by_latest(self, eth_tester):
         origin_block_number = eth_tester.get_block_by_number("pending")["number"]
 
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         block = eth_tester.get_block_by_number("latest")
         assert block["number"] == 9 + origin_block_number
 
     def test_get_block_by_pending(self, eth_tester):
         origin_block_number = eth_tester.get_block_by_number("pending")["number"]
 
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         block = eth_tester.get_block_by_number("pending")
         assert block["number"] == 10 + origin_block_number
 
@@ -874,7 +874,7 @@ class BaseTestBackendDirect:
         assert transaction["hash"] == transaction_hash
 
     def test_get_transaction_by_hash_for_unmined_transaction(self, eth_tester):
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.disable_auto_transactions_inclusion()
         transaction_hash = eth_tester.send_transaction(
             {
                 "from": eth_tester.get_accounts()[0],
@@ -1030,7 +1030,7 @@ class BaseTestBackendDirect:
         assert receipt["effectiveGasPrice"] == max_fee
 
     def test_get_transaction_receipt_for_unmined_transaction_raises(self, eth_tester):
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.disable_auto_transactions_inclusion()
         transaction_hash = eth_tester.send_transaction(
             {
                 "from": eth_tester.get_accounts()[0],
@@ -1082,7 +1082,7 @@ class BaseTestBackendDirect:
             "increment",
         )
 
-        eth_tester.mine_blocks(2)
+        eth_tester.include_blocks(2)
         eth_tester.send_transaction(call_math_transaction_inc)
 
         raw_result = eth_tester.call(call_math_transaction, 1)
@@ -1223,7 +1223,7 @@ class BaseTestBackendDirect:
         snapshot_id = eth_tester.take_snapshot()
 
         # now mine 10 blocks in
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         assert eth_tester.get_block_by_number("latest")["number"] == origin_latest + 10
         assert (
             eth_tester.get_block_by_number("pending")["number"] == origin_pending + 10
@@ -1234,7 +1234,7 @@ class BaseTestBackendDirect:
         assert eth_tester.get_block_by_number("pending")["number"] == origin_pending
 
     def test_snapshot_and_revert_post_genesis(self, eth_tester):
-        eth_tester.mine_blocks(5)
+        eth_tester.include_blocks(5)
 
         origin_latest = eth_tester.get_block_by_number("latest")["number"]
         origin_pending = eth_tester.get_block_by_number("pending")["number"]
@@ -1242,7 +1242,7 @@ class BaseTestBackendDirect:
         snapshot_id = eth_tester.take_snapshot()
 
         # now mine 10 blocks in
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
         assert eth_tester.get_block_by_number("latest")["number"] == origin_latest + 10
         assert (
             eth_tester.get_block_by_number("pending")["number"] == origin_pending + 10
@@ -1255,14 +1255,14 @@ class BaseTestBackendDirect:
 
     def test_revert_cleans_up_invalidated_pending_block_filters(self, eth_tester):
         # first mine 10 blocks in
-        eth_tester.mine_blocks(2)
+        eth_tester.include_blocks(2)
 
         # setup a filter
         filter_a_id = eth_tester.create_block_filter()
         filter_b_id = eth_tester.create_block_filter()
 
         # mine 5 blocks before the snapshot
-        common_blocks = set(eth_tester.mine_blocks(2))
+        common_blocks = set(eth_tester.include_blocks(2))
 
         snapshot_id = eth_tester.take_snapshot()
 
@@ -1278,7 +1278,7 @@ class BaseTestBackendDirect:
         fork_a_transaction_block_hash = eth_tester.get_transaction_by_hash(
             fork_a_transaction_hash,
         )["blockHash"]
-        fork_a_blocks = eth_tester.mine_blocks(2)
+        fork_a_blocks = eth_tester.include_blocks(2)
 
         before_revert_changes_logs_a = eth_tester.get_only_filter_changes(filter_a_id)
         before_revert_all_logs_a = eth_tester.get_all_filter_logs(filter_a_id)
@@ -1315,7 +1315,7 @@ class BaseTestBackendDirect:
         fork_b_transaction_block_hash = eth_tester.get_transaction_by_hash(
             fork_b_transaction_hash,
         )["blockHash"]
-        fork_b_blocks = eth_tester.mine_blocks(2)
+        fork_b_blocks = eth_tester.include_blocks(2)
 
         # check that are blocks don't intersect
         assert not set(fork_a_blocks).intersection(fork_b_blocks)
@@ -1458,7 +1458,7 @@ class BaseTestBackendDirect:
     def test_reset_to_genesis(self, eth_tester):
         origin_latest = eth_tester.get_block_by_number("latest")["number"]
         origin_pending = eth_tester.get_block_by_number("pending")["number"]
-        eth_tester.mine_blocks(5)
+        eth_tester.include_blocks(5)
 
         assert eth_tester.get_block_by_number("latest")["number"] == origin_latest + 5
         assert eth_tester.get_block_by_number("pending")["number"] == origin_pending + 5
@@ -1473,19 +1473,19 @@ class BaseTestBackendDirect:
     #
     def test_block_filter(self, eth_tester):
         # first mine 10 blocks in
-        eth_tester.mine_blocks(10)
+        eth_tester.include_blocks(10)
 
         # setup a filter
         filter_a_id = eth_tester.create_block_filter()
 
         # mine another 5 blocks
-        blocks_10_to_14 = eth_tester.mine_blocks(5)
+        blocks_10_to_14 = eth_tester.include_blocks(5)
 
         # setup another filter
         filter_b_id = eth_tester.create_block_filter()
 
         # mine another 8 blocks
-        blocks_15_to_22 = eth_tester.mine_blocks(8)
+        blocks_15_to_22 = eth_tester.include_blocks(8)
 
         filter_a_changes_part_1 = eth_tester.get_only_filter_changes(filter_a_id)
         filter_a_logs_part_1 = eth_tester.get_all_filter_logs(filter_a_id)
@@ -1502,7 +1502,7 @@ class BaseTestBackendDirect:
         assert set(filter_b_logs_part_1) == set(blocks_15_to_22)
 
         # mine another 7 blocks
-        blocks_23_to_29 = eth_tester.mine_blocks(7)
+        blocks_23_to_29 = eth_tester.include_blocks(7)
 
         filter_a_changes_part_2 = eth_tester.get_only_filter_changes(filter_a_id)
         filter_b_changes = eth_tester.get_only_filter_changes(filter_b_id)
@@ -1787,7 +1787,7 @@ class BaseTestBackendDirect:
     # Serializer
     #
     def test_receipt_gas_used_computation(self, eth_tester):
-        eth_tester.disable_auto_mine_transactions()
+        eth_tester.disable_auto_transactions_inclusion()
 
         tx_hashes = []
         for i in range(4):
@@ -1799,7 +1799,7 @@ class BaseTestBackendDirect:
             }
             tx_hash = eth_tester.send_transaction(tx)
             tx_hashes.append(tx_hash)
-        eth_tester.mine_block()
+        eth_tester.include_block()
 
         cumulative_gas_used = 0
         for tx_hash in tx_hashes:
@@ -1813,7 +1813,7 @@ class BaseTestBackendDirect:
     #
     def test_time_traveling(self, eth_tester):
         # first mine a few blocks
-        eth_tester.mine_blocks(3)
+        eth_tester.include_blocks(3)
 
         # grab the block before time traveling
         before_block = eth_tester.get_block_by_number("latest")
@@ -1830,7 +1830,7 @@ class BaseTestBackendDirect:
 
     def test_time_traveling_backwards_not_allowed(self, eth_tester):
         # first mine a few blocks
-        eth_tester.mine_blocks(3)
+        eth_tester.include_blocks(3)
 
         # check the time
         before_timestamp = eth_tester.get_block_by_number("latest")["timestamp"]

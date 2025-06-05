@@ -87,12 +87,12 @@ def backend_proxy_method(backend_method_name):
     return proxy_method
 
 
-def handle_auto_mining(func):
+def handle_auto_block_inclusion(func):
     @functools.wraps(func)
     def func_wrapper(self, *args, **kwargs):
-        if self.auto_mine_transactions:
+        if self.auto_include_transactions:
             transaction_hash = func(self, *args, **kwargs)
-            self.mine_block()
+            self.include_block()
         else:
             snapshot = self.take_snapshot()
             try:
@@ -114,7 +114,7 @@ def handle_auto_mining(func):
         # TODO: Sometime in 2022 the inclusion of gasPrice may be removed from
         #  dynamic fee transactions and we can get rid of this behavior.
         #  https://github.com/ethereum/execution-specs/pull/251
-        # remove gasPrice for dynamic fee transactions
+        #  remove gasPrice for dynamic fee transactions
         if "gasPrice" and "maxFeePerGas" in pending_transaction:
             cleaned_transaction = dissoc(cleaned_transaction, "gasPrice")
 
@@ -126,31 +126,25 @@ def handle_auto_mining(func):
 class EthereumTester:
     backend = None
     fork_blocks = None
-    auto_mine_transactions = None
+    auto_include_transactions = None
 
-    def __init__(self, backend=None, auto_mine_transactions=True):
+    def __init__(self, backend=None, auto_include_transactions=True):
         if backend is None:
             backend = get_chain_backend()
 
         self.backend = backend
         self.chain_id = lambda: int(self.backend.chain.chain_id)
 
-        self.auto_mine_transactions = auto_mine_transactions
+        self.auto_include_transactions = auto_include_transactions
         self._reset_local_state()
 
-    #
-    # Private API
-    #
     _filter_counter = None
     _log_filters = None
     _block_filters = None
     _pending_transaction_filters = None
-
     _pending_transactions = []
-
     _snapshot_counter = None
     _snapshots = None
-
     _account_passwords = None
     _account_unlock = None
 
@@ -169,12 +163,10 @@ class EthereumTester:
         self._account_passwords = {}
         self._account_unlock = collections.defaultdict(bool)
 
-    #
-    # Time Traveling
-    #
+    # -- time traveling -- #
     def time_travel(self, to_timestamp):
         # make sure we are not traveling back in time as this is not possible.
-        current_timestamp = self.get_block_by_number("pending")["timestamp"]
+        current_timestamp = self.backend.get_block_by_number("pending")["timestamp"]
         if to_timestamp == current_timestamp:
             # no change, return immediately
             return
@@ -186,9 +178,7 @@ class EthereumTester:
         else:
             self.backend.time_travel(to_timestamp)
 
-    #
-    # Accounts
-    #
+    # -- accounts -- #
     @validate_call(validate_return=True)
     def get_accounts(self) -> List[ResponseHexStr]:
         raw_accounts = self.backend.get_accounts()
@@ -373,31 +363,31 @@ class EthereumTester:
         return fee_history
 
     # -- block inclusion -- #
-    def enable_auto_mine_transactions(self):
-        self.auto_mine_transactions = True
+    def enable_auto_transaction_inclusion(self):
+        self.auto_include_transactions = True
         if not self.backend.handles_pending_transactions:
             sent_transaction_hashes = self._pop_pending_transactions_to_pending_block()
-            self.mine_block()
+            self.include_block()
             return sent_transaction_hashes
         else:
             pending_transactions = self.backend._pending_block["transactions"]
-            self.mine_block()
+            self.include_block()
             return [self.backend._get_tx_hash(tx) for tx in pending_transactions]
 
-    def disable_auto_mine_transactions(self):
-        self.auto_mine_transactions = False
+    def disable_auto_transactions_inclusion(self):
+        self.auto_include_transactions = False
 
     @validate_call(validate_return=True)
-    def mine_blocks(
+    def include_blocks(
         self, num_blocks: int = 1, coinbase: RequestHexBytes = ZERO_ADDRESS_HEX
     ) -> List[ResponseHexStr]:
         if (
-            not self.auto_mine_transactions
+            not self.auto_include_transactions
             and not self.backend.handles_pending_transactions
         ):
             self._pop_pending_transactions_to_pending_block()
 
-        _block_hashes = self.backend.mine_blocks(num_blocks, coinbase)
+        _block_hashes = self.backend.include_blocks(num_blocks, coinbase)
         block_hashes = []
         for blockhash in _block_hashes:
             if not isinstance(blockhash, str):
@@ -405,8 +395,8 @@ class EthereumTester:
 
         if len(block_hashes) != num_blocks:
             raise ValidationError(
-                f"Invariant: tried to mine {num_blocks} blocks.  Got "
-                f"{len(block_hashes)} mined block hashes."
+                f"Invariant: tried to include {num_blocks} blocks.  Got "
+                f"{len(block_hashes)} included block hashes."
             )
 
         # feed the block hashes to any block filters
@@ -420,15 +410,13 @@ class EthereumTester:
         return block_hashes
 
     @validate_call(validate_return=True)
-    def mine_block(
+    def include_block(
         self, coinbase: RequestHexBytes = ZERO_ADDRESS_HEX
     ) -> ResponseHexStr:
-        block_hash = self.mine_blocks(1, coinbase=coinbase)[0]
+        block_hash = self.include_blocks(1, coinbase=coinbase)[0]
         return block_hash
 
-    #
-    # Private mining API
-    #
+    # -- private block inclusion API -- #
     def _process_block_logs(self, block):
         for _fid, filter_ in self._log_filters.items():
             self._add_log_entries_to_filter(block, filter_)
@@ -454,15 +442,13 @@ class EthereumTester:
                 txn, txn_internal_type="send_signed"
             )
 
-    #
-    # Transaction Sending
-    #
+    # -- transaction sending -- #
     def _handle_pending_tx_filtering(self, transaction_hash):
         # feed the transaction hash to any pending transaction filters.
         for _, filter_ in self._pending_transaction_filters.items():
             filter_.add(transaction_hash)
 
-    @handle_auto_mining
+    @handle_auto_block_inclusion
     @validate_call
     def send_raw_transaction(self, raw_transaction_hex: RequestHexBytes):
         transaction_hash = self.backend.send_raw_transaction(raw_transaction_hex)
@@ -470,21 +456,25 @@ class EthereumTester:
         return transaction_hash
 
     @validate_call(validate_return=True)
-    @handle_auto_mining
+    @handle_auto_block_inclusion
     def send_transaction(self, transaction: TransactionRequestObject) -> ResponseHexStr:
         self._fill_transaction_defaults(transaction)
         return self._add_transaction_to_pending_block(transaction)
 
     @validate_call(validate_return=True)
     def call(
-        self, transaction: TransactionRequestObject, block_number="pending"
+        self,
+        transaction: TransactionRequestObject,
+        block_number: RequestBlockIdentifier = "pending",
     ) -> ResponseHexStr:
         self._fill_transaction_defaults(transaction, block_number)
         return self.backend.call(transaction, block_number)
 
     @validate_call(validate_return=True)
     def estimate_gas(
-        self, transaction: TransactionRequestObject, block_number="pending"
+        self,
+        transaction: TransactionRequestObject,
+        block_number: RequestBlockIdentifier = "pending",
     ) -> ResponseHexStr:
         self._fill_transaction_defaults(transaction, block_number, is_estimate_gas=True)
         return self.backend.estimate_gas(transaction, block_number)

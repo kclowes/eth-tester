@@ -247,7 +247,7 @@ class EELSBackend(BaseChainBackend):
 
     def time_travel(self, to_timestamp):
         self._pending_block["header"]["timestamp"] = U256(to_timestamp)
-        self.mine_blocks()
+        self.include_blocks()
         return to_timestamp
 
     #
@@ -547,22 +547,22 @@ class EELSBackend(BaseChainBackend):
             "withdrawals": pending_block["withdrawals"][:],
         }
 
-    def _mine_pending_block(self, timestamp: U256 = None) -> Dict[str, Any]:
+    def _include_pending_block(self, timestamp: U256 = None) -> Dict[str, Any]:
         # initial validation
         block = self._pending_block
         block_header = block["header"]
 
         if block_header["number"] != self.chain.latest_block.header.number + Uint(1):
             raise ValidationError(
-                f"Cannot mine a block with a number, {block_header['number']}, that is "
-                "not one greater than the latest block number, "
+                f"Cannot include a block with a number, {block_header['number']}, that "
+                "is not one greater than the latest block number, "
                 f"{self.chain.latest_block.header.number}."
             )
 
         # timestamp validation
         block_header["difficulty"] = block_header["difficulty"]
         if block_header["timestamp"] is None:
-            # set the timestamp when mining unless already set by time_travel
+            # set the timestamp when including block, unless already set by time_travel
             parent_timestamp = self.chain.latest_block.header.timestamp
             current_time = U256(timestamp or int(time.time()))
             block_header["timestamp"] = U256(
@@ -611,7 +611,7 @@ class EELSBackend(BaseChainBackend):
         blockhash = keccak256(rlp.encode(_eels_block_header))
         assert blockhash == keccak256(rlp.encode(self.chain.latest_block.header))
 
-        # update transactions in the block post-mining
+        # update transactions in the block post block inclusion
         blocknum = int(block_header["number"])
 
         # logIndex is sequential across all transactions in a block
@@ -620,7 +620,7 @@ class EELSBackend(BaseChainBackend):
         for i, (trie_key, tx) in enumerate(
             block_output.transactions_trie._data.items()
         ):
-            # update saved tx data post-mining
+            # update saved tx data post block inclusion
             tx_hash = self._get_tx_hash(tx)
             updated_tx = self._transactions_map[tx_hash]
             updated_tx["blockNumber"] = blocknum
@@ -628,7 +628,7 @@ class EELSBackend(BaseChainBackend):
             updated_tx["transactionIndex"] = i
             self._transactions_map[tx_hash] = updated_tx
 
-            # update trie_receipt values in apply_body_output, post-mining
+            # update trie_receipt values in apply_body_output, post block-inclusion
             trie_receipt = block_output.receipts_trie._data[trie_key]
 
             # decode receipt if necessary
@@ -687,7 +687,6 @@ class EELSBackend(BaseChainBackend):
                         "logIndex": log_index,
                         "transactionIndex": i,
                         "transactionHash": tx_hash,
-                        "type": "mined",
                     }
                 )
                 log_index += 1
@@ -703,15 +702,15 @@ class EELSBackend(BaseChainBackend):
 
             self._receipts_map[tx_hash] = updated_receipt
 
-        # update saved block data post-mining
+        # update saved block data post block-inclusion
         self._build_new_pending_block()
         self._state_context_history[blocknum] = self._copy_state_context()
         return block
 
     @to_tuple
-    def mine_blocks(self, num_blocks: int = 1, coinbase=ZERO_ADDRESS):
+    def include_blocks(self, num_blocks: int = 1, coinbase=ZERO_ADDRESS):
         for _ in range(num_blocks):
-            self._mine_pending_block()
+            self._include_pending_block()
             yield keccak256(rlp.encode(self.chain.latest_block.header))
 
     #
@@ -1217,10 +1216,10 @@ class EELSBackend(BaseChainBackend):
                     amount=U256(withdrawal["amount"]),
                 )
             )
-        # TODO: Consider just adding these to the pending block without auto mining.
+        # TODO: Consider just adding these to the pending block without auto inclusion.
         #  This would have to change not just for EELSBackend, so would be a bigger
         #  change later down the line.
-        self.mine_blocks(1)
+        self.include_blocks(1)
 
     def get_fee_history(
         self, block_count=1, newest_block="latest", reward_percentiles: List[int] = ()

@@ -125,8 +125,8 @@ Similarly, ethereum tester ensures that return values conform to similar rules.
 
 Any `block_number` parameter will accept the following string values.
 
-- `'latest'`: for the latest mined block.
-- `'pending'`: for the current un-mined block.
+- `'latest'`: for the latest included block.
+- `'pending'`: for the current pending block.
 - `'earliest'`: for the genesis block.
 - `'safe'`: for the last block that has passed 2/3 of attestations post-merge.
 - `'finalized'`: for the last finalized block post-merge.
@@ -139,7 +139,7 @@ Any `block_number` parameter will accept the following string values.
 
 ### Instantiation
 
-- `eth_tester.EthereumTester(backend=None, validator=None, normalizer=None, auto_mine_transactions=True, fork_blocks=None)`
+- `eth_tester.EthereumTester(backend=None, validator=None, normalizer=None, auto_include_transactions=True, fork_blocks=None)`
 
 The `EthereumTester` object is the sole API entrypoint.  Instantiation of this
 object accepts the following parameters.
@@ -147,7 +147,7 @@ object accepts the following parameters.
 - `backend`: The chain backend being used.  See the [chain backends](#backends)
 - `validator`: The validator being used.  See the [validators](#validation)
 - `normalizer`: The normalizer being used.  See the [normalizers](#normalization)
-- `auto_mine_transactions`: If *truthy* transactions will be automatically mined at the time they are submitted.  See [`enable_auto_mine_transactions`](#api-enable_auto_mine_transactions) and [`disable_auto_mine_transactions`](#api-disable_auto_mine_transactions).
+- `auto_include_transactions`: If *truthy* transactions will be added to pending block and block will be included in chain at the time they are submitted.  See [`enable_auto_mine_transactions`](#api-enable_auto_mine_transactions) and [`disable_auto_mine_transactions`](#api-disable_auto_mine_transactions).
 - `fork_blocks`: configures which block numbers the various network hard fork rules will be activated.  See [fork-rules](#fork-rules)
 
 ```python
@@ -176,42 +176,45 @@ The chain can only time travel forward in time.
 The `timestamp` must be an integer, strictly greater than the current timestamp
 of the latest block.
 
-> Note: Time traveling will result in a new block being mined.
+> Note: Time traveling will result in a new block being included.
 
-### Mining
+### Block inclusion
 
-Manually mining blocks can be done with the following API.  The `coinbase`
+Manually including blocks can be done with the following API.  The `coinbase`
 parameter of these methods **must** be a hexadecimal encoded address.
 
-<a id="api-mine_blocks"></a>
+<a id="api-include_blocks"></a>
 
-#### `EthereumTester.mine_blocks(num_blocks=1, coinbase=ZERO_ADDRESS)`
+#### `EthereumTester.include_blocks(num_blocks=1, coinbase=ZERO_ADDRESS)`
 
-Mines `num_blocks` new blocks, returning an iterable of the newly mined block hashes.
+Mines `num_blocks` new blocks, returning an iterable of the newly included block hashes.
 
-<a id="api-mine_block"></a>
+<a id="api-include_block"></a>
 
-#### `EthereumTester.mine_block(coinbase=ZERO_ADDRESS)`
+#### `EthereumTester.include_block(coinbase=ZERO_ADDRESS)`
 
-Mines a single new block, returning the mined block's hash.
+Mines a single new block, returning the included block's hash.
 
-<a id="api-auto_mine_transactions"></a>
+<a id="api-auto_include_transactions"></a>
 
-#### Auto-mining transactions
+#### Auto-include transactions
 
-By default, all transactions are mined immediately.  This means that each transaction you send will result in a new block being mined, and that all blocks will only ever have at most a single transaction.  This behavior can be controlled with the following methods.
+By default, all transactions are included immediately. This means that each transaction
+you send will result in a new block being included in the chain, and that all blocks
+will only ever have at most a single transaction. This behavior can be controlled with
+the following methods.
 
-<a id="api-enable_auto_mine_transactions"></a>
+<a id="api-enable_auto_transaction_inclusion"></a>
 
-#### `EthereumTester.enable_auto_mine_transactions()`
+#### `EthereumTester.enable_auto_transaction_inclusion()`
 
-Turns on auto-mining of transactions.
+Turns on block inclusion when a single transaction is sent.
 
-<a id="api-disable_auto_mine_transactions"></a>
+<a id="api-disable_auto_transaction_inclusion"></a>
 
-#### `EthereumTester.disable_auto_mine_transactions()`
+#### `EthereumTester.disable_auto_transaction_inclusion()`
 
-Turns **off** auto-mining of transactions.
+Turns **off** auto-block-inclusion when transactions are sent.
 
 ### Accounts
 
@@ -355,7 +358,7 @@ transaction cannot be found.
  'gas_price': 1375000000}
 ```
 
-> Note: For unmined transaction, `transaction_index`, `block_number` and `block_hash` will all be `None`.
+> Note: For pending transaction, `transaction_index`, `block_number` and `block_hash` will all be `None`.
 
 <a id="api-get_block_by_number"></a>
 
@@ -454,13 +457,12 @@ found for the given hash.
     '0xf70fe689e290d8ce2b2a388ac28db36fbb0e16a6d89c6804c461f65a1b40bb15',
     '0x0000000000000000000000000000000000000000000000000000000000003039'),
    'transaction_hash': '0x9a7cc8b7accf54ecb1901bf4d0178f28ca457bb9f9c245692c0ca8fabef08d3b',
-   'transaction_index': 0,
-   'type': 'mined'},),
+   'transaction_index': 0},),
  'transaction_hash': '0x9a7cc8b7accf54ecb1901bf4d0178f28ca457bb9f9c245692c0ca8fabef08d3b',
  'transaction_index': 0}
 ```
 
-- Receipts for unmined transactions will have all of `block_hash`, `block_number` and `transaction_index` set to `None`.
+- Receipts for pending transactions will have all of `block_hash`, `block_number` and `transaction_index` set to `None`.
 - Receipts for transactions which create a contract will have the created contract address in the `contract_address` field.
 
 ### Transaction Sending
@@ -532,27 +534,27 @@ Note that specifying `reward_percentiles` has no effect on the response and so `
 
 #### `EthereumTester.create_block_filter() -> integer`
 
-Creates a new filter for newly mined blocks.  Returns the `filter_id` which can
-be used to retrieve the block hashes for the mined blocks.
+Creates a new filter for newly included blocks. Returns the `filter_id` which can
+be used to retrieve the block hashes for the included blocks.
 
 ```python
->>> filter_id = t.create_block_filter()
->>> filter_id = t.create_block_filter()
->>> t.mine_blocks(3)
->>> t.get_only_filter_changes(filter_id)
+>> > filter_id = t.create_block_filter()
+>> > filter_id = t.create_block_filter()
+>> > t.include_blocks(3)
+>> > t.get_only_filter_changes(filter_id)
 ('0x07004287f82c1a7ab15d7b8baa03ac14d7e9167ab74e47e1dc4bd2213dd18431',
- '0x5e3222c506585e1202da08c7231afdc5e472c777c245b822f44f141d335c744a',
- '0x4051c3ba3dcca95da5db1be38e44f5b47fd1a855ba522123e3254fe3f8e271ea')
->>> t.mine_blocks(2)
->>> t.get_only_filter_changes(filter_id)
+    '0x5e3222c506585e1202da08c7231afdc5e472c777c245b822f44f141d335c744a',
+    '0x4051c3ba3dcca95da5db1be38e44f5b47fd1a855ba522123e3254fe3f8e271ea')
+>> > t.include_blocks(2)
+>> > t.get_only_filter_changes(filter_id)
 ('0x6649c3a7cb3c7ede3a4fd10ae9dd63775eccdafe39ace5f5a9ae81d360089fba',
- '0x04890a08bca0ed2f1496eb29c5dc7aa66014c85377c6d9d9c2c315f85204b39c')
->>> t.get_all_filter_logs(filter_id)
+    '0x04890a08bca0ed2f1496eb29c5dc7aa66014c85377c6d9d9c2c315f85204b39c')
+>> > t.get_all_filter_logs(filter_id)
 ('0x07004287f82c1a7ab15d7b8baa03ac14d7e9167ab74e47e1dc4bd2213dd18431',
- '0x5e3222c506585e1202da08c7231afdc5e472c777c245b822f44f141d335c744a',
- '0x4051c3ba3dcca95da5db1be38e44f5b47fd1a855ba522123e3254fe3f8e271ea',
- '0x6649c3a7cb3c7ede3a4fd10ae9dd63775eccdafe39ace5f5a9ae81d360089fba',
- '0x04890a08bca0ed2f1496eb29c5dc7aa66014c85377c6d9d9c2c315f85204b39c')
+    '0x5e3222c506585e1202da08c7231afdc5e472c777c245b822f44f141d335c744a',
+    '0x4051c3ba3dcca95da5db1be38e44f5b47fd1a855ba522123e3254fe3f8e271ea',
+    '0x6649c3a7cb3c7ede3a4fd10ae9dd63775eccdafe39ace5f5a9ae81d360089fba',
+    '0x04890a08bca0ed2f1496eb29c5dc7aa66014c85377c6d9d9c2c315f85204b39c')
 ```
 
 <a id="api-create_pending_transaction_filter"></a>
@@ -603,8 +605,7 @@ this function can be used to filter the log entries.
   'topics': ('0xf70fe689e290d8ce2b2a388ac28db36fbb0e16a6d89c6804c461f65a1b40bb15',
    '0x0000000000000000000000000000000000000000000000000000000000003039'),
   'transaction_hash': '0x728bf75fc7d23845f328d2223df7fe9cafc6e7d23792457b625d5b60d2b22b7c',
-  'transaction_index': 0,
-  'type': 'mined'},
+  'transaction_index': 0},
  {'address': '0xd6F084Ee15E38c4f7e091f8DD0FE6Fe4a0E203Ef',
   'block_hash': '0x07d7e46be6f9ba53ecd4323fb99ec656e652c4b14f4b8e8a244ee7f997464725',
   'block_number': 12,
@@ -613,8 +614,7 @@ this function can be used to filter the log entries.
   'topics': ('0xf70fe689e290d8ce2b2a388ac28db36fbb0e16a6d89c6804c461f65a1b40bb15',
    '0x0000000000000000000000000000000000000000000000000000000000010932'),
   'transaction_hash': '0x63f5b381ffd09940ce22c45a3f4e163bd743851cb6b4f43771fbf0b3c14b2f8a',
-  'transaction_index': 0,
-  'type': 'mined'})
+  'transaction_index': 0})
 ```
 
 <a id="api-delete_filter"></a>

@@ -503,29 +503,29 @@ class PyEVMBackend(BaseChainBackend):
     #
     def time_travel(self, to_timestamp):
         self.chain.header = self.chain.header.copy(timestamp=(to_timestamp))
-        self.mine_blocks()
+        self.include_blocks()
         return to_timestamp
 
     #
     # Importing blocks
     #
     @to_tuple
-    def mine_blocks(self, num_blocks=1, coinbase=ZERO_ADDRESS):
-        mine_kwargs = {"coinbase": coinbase}
+    def include_blocks(self, num_blocks=1, coinbase=ZERO_ADDRESS):
+        kwargs = {"coinbase": coinbase}
 
         for _ in range(num_blocks):
             if isinstance(self.chain.get_vm(), ParisVM):
                 # post-merge, generate a random `mix_hash` to simulate the
                 # `prevrandao` value.
-                mine_kwargs["mix_hash"] = os.urandom(32)
+                kwargs["mix_hash"] = os.urandom(32)
 
             if isinstance(self.chain.get_vm(), CancunVM):
                 transactions = self.chain.get_block().transactions
-                mine_kwargs["blob_gas_used"] = sum(
+                kwargs["blob_gas_used"] = sum(
                     get_total_blob_gas(tx) for tx in transactions
                 )
 
-            block = self.chain.mine_block(**mine_kwargs)
+            block = self.chain.mine_block(**kwargs)
             yield block.hash
 
     #

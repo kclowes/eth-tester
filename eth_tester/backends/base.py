@@ -49,9 +49,9 @@ class BaseChainBackend(metaclass=ABCMeta):
     def time_travel(self, to_timestamp: int) -> None:
         raise NotImplementedError("Must be implemented by subclasses")
 
-    # -- mining -- #
+    # -- block inclusion -- #
     @abstractmethod
-    def mine_blocks(
+    def include_blocks(
         self, num_blocks: int = 1, coinbase: "RequestHexStr" = ZERO_ADDRESS
     ) -> None:
         raise NotImplementedError("Must be implemented by subclasses")

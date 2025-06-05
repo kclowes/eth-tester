@@ -261,7 +261,6 @@ def serialize_transaction_receipt(
 
 def serialize_log(block, transaction, transaction_index, log, log_index, is_pending):
     return {
-        "type": "pending" if is_pending else "mined",
         "logIndex": log_index,
         "transactionIndex": None if is_pending else transaction_index,
         "transactionHash": transaction.hash,
