@@ -59,6 +59,9 @@ class ResponseSetCodeAuthorization(RequestType):
 class BaseTransactionResponseModel(ResponseModel):
     """Base model for Ethereum transaction requests."""
 
+    block_number: "ResponseHexStr"
+    block_hash: "ResponseHexStr"
+    transaction_index: "ResponseHexStr"
     chain_id: Optional["ResponseHexStr"] = Field(default=None)
     data: Optional["ResponseHexStr"] = Field(default="0x")
     nonce: Optional["ResponseHexStr"] = Field(default=None)
@@ -262,7 +265,7 @@ class TransactionReceiptResponse(ResponseModel):
     """Transaction receipt response model."""
 
     sender: "ResponseHexStr" = Field(alias="from")
-    to: "ResponseHexStr"
+    to: "ResponseHexStr" = Field(required=True)
     transaction_hash: "ResponseHexStr"
     transaction_index: "ResponseHexStr"
     block_hash: "ResponseHexStr"
@@ -271,11 +274,13 @@ class TransactionReceiptResponse(ResponseModel):
     gas_used: "ResponseHexStr"
     contract_address: Optional["ResponseHexStr"]
     logs: List[Dict[str, Any]] = Field(default_factory=list)
-    # logs_bloom: "ResponseHexStr"
     status: Optional["ResponseHexStr"]
-    # type: Optional["ResponseHexStr"]
+    state_root: "ResponseHexStr"
+    type: Optional["ResponseHexStr"] = None
     effective_gas_price: Optional["ResponseHexStr"]
-    blob_gas_used: Optional["ResponseHexStr"]
+    excess_blob_gas: Optional["ResponseHexStr"] = None
+    blob_gas_price: Optional["ResponseHexStr"] = None
+    blob_gas_used: Optional["ResponseHexStr"] = None
 
 
 TxReceiptRPCResponse = SerializedModel[TransactionReceiptResponse]

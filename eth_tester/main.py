@@ -489,9 +489,7 @@ class EthereumTester:
         self._fill_transaction_defaults(transaction, block_number, is_estimate_gas=True)
         return self.backend.estimate_gas(transaction, block_number)
 
-    #
-    # Private Transaction API
-    #
+    # -- private transaction API -- #
     def _add_transaction_to_pending_block(self, transaction: TransactionRequestObject):
         if transaction.sender in self._account_passwords:
             unlocked_until = self._account_unlock[transaction.sender]
@@ -512,9 +510,7 @@ class EthereumTester:
         self._handle_pending_tx_filtering(tx_hash)
         return tx_hash
 
-    #
-    # Snapshot and Revert
-    #
+    # -- snapshot and revert -- #
     def take_snapshot(self):
         snapshot = self.backend.take_snapshot()
         snapshot_id = next(self._snapshot_counter)

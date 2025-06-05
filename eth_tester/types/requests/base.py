@@ -22,12 +22,6 @@ from eth_utils import (
 from eth_utils.functional import (
     identity,
 )
-from eth_utils.toolz import (
-    merge,
-)
-from pydantic import (
-    ConfigDict,
-)
 from pydantic_core import (
     core_schema,
 )
@@ -64,8 +58,10 @@ BACKEND_SERIALIZER_CONFIG: Final = {
 # -- base model -- #
 class RequestModel(CamelModel):
     _key_mapper: Dict[BackendContext, Dict[str, str]]
-    model_config = ConfigDict(
-        **merge(CamelModel.model_config, {"populate_by_name": False})
+    model_config = CamelModel.model_config.copy()
+    model_config.update(
+        populate_by_name=False,
+        extra="forbid",
     )
 
     def serialize(self) -> Dict[str, Any]:

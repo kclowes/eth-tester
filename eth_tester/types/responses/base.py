@@ -18,8 +18,11 @@ from pydantic_core import (
 
 
 class ResponseModel(CamelModel):
+    model_config = CamelModel.model_config.copy()
+    model_config.update(extra="forbid")
+
     def serialize(self) -> Dict[str, Any]:
-        return self.model_dump(by_alias=True)
+        return self.model_dump(by_alias=True, exclude_none=True, exclude_unset=True)
 
 
 T = TypeVar("T", bound=ResponseModel)

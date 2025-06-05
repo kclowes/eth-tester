@@ -1,3 +1,7 @@
+from typing import (
+    Optional,
+)
+
 from pydantic import (
     Field,
 )
@@ -32,12 +36,12 @@ class BlockHeaderResponse(ResponseModel):
     timestamp: ResponseHexStr
     transactions: list[ResponseHexStr] = Field(default_factory=list)
     uncles: list[ResponseHexStr]
-    base_fee_per_gas: ResponseHexStr
-    withdrawals: list[ResponseHexStr] = Field(default_factory=list)
-    withdrawals_root: ResponseHexStr
-    parent_beacon_block_root: ResponseHexStr
-    blob_gas_used: ResponseHexStr
-    excess_blob_gas: ResponseHexStr
+    base_fee_per_gas: Optional[ResponseHexStr] = None
+    withdrawals: Optional[list[ResponseHexStr]] = Field(default=None)
+    withdrawals_root: Optional[ResponseHexStr] = None
+    parent_beacon_block_root: Optional[ResponseHexStr] = None
+    blob_gas_used: Optional[ResponseHexStr] = None
+    excess_blob_gas: Optional[ResponseHexStr] = None
 
 
 BlockRPCResponse = SerializedModel[BlockHeaderResponse]
