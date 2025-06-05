@@ -15,16 +15,16 @@ from eth_utils import (
 from eth_tester.utils.casing import (
     dict_keys_to_lower_camel_case,
 )
-
+from eth_tester.types.requests.filters import RequestLogFilterParams
 
 class Filter:
-    filter_params = None
+    filter_params: RequestLogFilterParams = None
     filter_fn = None
 
     values = None
     queue = None
 
-    def __init__(self, filter_params, filter_fn=None):
+    def __init__(self, filter_params: RequestLogFilterParams, filter_fn=None):
         self.filter_params = filter_params
         self.filter_fn = filter_fn
 

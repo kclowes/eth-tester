@@ -58,6 +58,9 @@ from eth_tester.types.responses.base import (
 from eth_tester.types.responses.blocks import (
     BlockRPCResponse,
 )
+from eth_tester.types.responses.filters import (
+    ResponseFilterId,
+)
 from eth_tester.types.responses.transactions import (
     TransactionRPCResponse,
     TxReceiptRPCResponse,
@@ -559,8 +562,8 @@ class EthereumTester:
                 block = self.get_block_by_number(block_number)
                 self._add_log_entries_to_filter(block, new_filter)
 
-        filter_id = self.normalizer.normalize_outbound_filter_id(raw_filter_id)
-        return filter_id
+        # filter_id = self.normalizer.normalize_outbound_filter_id(raw_filter_id)
+        return ResponseFilterId(filter_id=raw_filter_id)
 
     def delete_filter(self, filter_id):
         self.validator.validate_inbound_filter_id(filter_id)
