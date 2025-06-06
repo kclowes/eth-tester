@@ -491,7 +491,7 @@ class EthereumTester:
             compose(
                 bool,
                 self.get_block_by_hash,
-                self.normalizer.normalize_outbound_block_hash,
+                # self.normalizer.normalize_outbound_block_hash,
             ),
             lambda v: False,
         )
@@ -537,7 +537,11 @@ class EthereumTester:
         return filter_id
 
     def create_log_filter(
-        self, from_block=None, to_block=None, address=None, topics=None
+        self,
+        from_block: RequestBlockIdentifier = None,
+        to_block: RequestBlockIdentifier = None,
+        address: List[RequestHexBytes] = None,
+        topics: List[RequestHexBytes] = None,
     ):
         raw_filter_id = next(self._filter_counter)
         raw_filter_params = {
@@ -567,14 +571,13 @@ class EthereumTester:
 
     def delete_filter(self, filter_id):
         self.validator.validate_inbound_filter_id(filter_id)
-        raw_filter_id = self.normalizer.normalize_inbound_filter_id(filter_id)
 
-        if raw_filter_id in self._block_filters:
-            del self._block_filters[raw_filter_id]
-        elif raw_filter_id in self._pending_transaction_filters:
-            del self._pending_transaction_filters[raw_filter_id]
-        elif raw_filter_id in self._log_filters:
-            del self._log_filters[raw_filter_id]
+        if filter_id in self._block_filters:
+            del self._block_filters[filter_id]
+        elif filter_id in self._pending_transaction_filters:
+            del self._pending_transaction_filters[filter_id]
+        elif filter_id in self._log_filters:
+            del self._log_filters[filter_id]
         else:
             raise FilterNotFound("Unknown filter id")
 
@@ -595,7 +598,8 @@ class EthereumTester:
         yield from filter_.get_changes()
 
     @to_tuple
-    def get_all_filter_logs(self, filter_id):
+    @validate_call(validate_return=True)
+    def get_all_filter_logs(self, filter_id: int):
         if filter_id in self._block_filters:
             filter_ = self._block_filters[filter_id]
             # normalize_fn = self.normalizer.normalize_outbound_block_hash
@@ -611,7 +615,14 @@ class EthereumTester:
         yield from filter_.get_all()
 
     @to_tuple
-    def get_logs(self, from_block=None, to_block=None, address=None, topics=None):
+    @validate_call(validate_return=True)
+    def get_logs(
+        self,
+        from_block: RequestBlockIdentifier = None,
+        to_block: RequestBlockIdentifier = None,
+        address: List[RequestHexBytes] = None,
+        topics: List[RequestHexBytes] = None,
+    ):
         # set up the filter object
         raw_filter_params = {
             "from_block": from_block,
