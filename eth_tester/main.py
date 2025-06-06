@@ -60,6 +60,7 @@ from eth_tester.types.responses.blocks import (
 )
 from eth_tester.types.responses.filters import (
     ResponseFilterId,
+    ResponseFilterModel,
 )
 from eth_tester.types.responses.transactions import (
     TransactionRPCResponse,
@@ -526,23 +527,26 @@ class EthereumTester:
     #
     # Filters
     #
-    def create_block_filter(self):
+    @validate_call(validate_return=True)
+    def create_block_filter(self) -> ResponseHexStr:
         filter_id = next(self._filter_counter)
         self._block_filters[filter_id] = Filter(filter_params=None)
-        return filter_id
+        return ResponseHexStr(filter_id)
 
-    def create_pending_transaction_filter(self):
+    @validate_call(validate_return=True)
+    def create_pending_transaction_filter(self) -> ResponseFilterId:
         filter_id = next(self._filter_counter)
         self._pending_transaction_filters[filter_id] = Filter(filter_params=None)
-        return filter_id
+        return ResponseHexStr(filter_id)
 
+    @validate_call(validate_return=True)
     def create_log_filter(
         self,
         from_block: RequestBlockIdentifier = None,
         to_block: RequestBlockIdentifier = None,
         address: List[RequestHexBytes] = None,
         topics: List[RequestHexBytes] = None,
-    ):
+    ) -> ResponseHexStr:
         raw_filter_id = next(self._filter_counter)
         raw_filter_params = {
             "from_block": from_block,
@@ -566,10 +570,9 @@ class EthereumTester:
                 block = self.get_block_by_number(block_number)
                 self._add_log_entries_to_filter(block, new_filter)
 
-        # filter_id = self.normalizer.normalize_outbound_filter_id(raw_filter_id)
-        return ResponseFilterId(filter_id=raw_filter_id)
+        return ResponseHexStr(raw_filter_id)
 
-    def delete_filter(self, filter_id):
+    def delete_filter(self, filter_id: RequestHexInteger):
         self.validator.validate_inbound_filter_id(filter_id)
 
         if filter_id in self._block_filters:
@@ -599,7 +602,9 @@ class EthereumTester:
 
     @to_tuple
     @validate_call(validate_return=True)
-    def get_all_filter_logs(self, filter_id: int):
+    def get_all_filter_logs(
+        self, filter_id: RequestHexInteger
+    ) -> List[ResponseFilterModel]:
         if filter_id in self._block_filters:
             filter_ = self._block_filters[filter_id]
             # normalize_fn = self.normalizer.normalize_outbound_block_hash
@@ -622,7 +627,7 @@ class EthereumTester:
         to_block: RequestBlockIdentifier = None,
         address: List[RequestHexBytes] = None,
         topics: List[RequestHexBytes] = None,
-    ):
+    ) -> List[ResponseFilterModel]:
         # set up the filter object
         raw_filter_params = {
             "from_block": from_block,
