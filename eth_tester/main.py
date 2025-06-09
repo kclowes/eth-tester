@@ -384,17 +384,19 @@ class EthereumTester:
         return block_hash
 
     # -- private block inclusion API -- #
-    def _process_block_logs(self, block):
+    def _process_block_logs(self, block: BlockRPCResponse) -> None:
         for _fid, filter_ in self._log_filters.items():
             self._add_log_entries_to_filter(block, filter_)
 
-    def _add_log_entries_to_filter(self, block, filter_):
+    def _add_log_entries_to_filter(
+        self, block: BlockRPCResponse, filter_: Filter
+    ) -> None:
         for transaction_hash in block["transactions"]:
             receipt = self.get_transaction_receipt(transaction_hash)
             for log_entry in receipt["logs"]:
                 filter_.add(log_entry)
 
-    def _pop_pending_transactions_to_pending_block(self):
+    def _pop_pending_transactions_to_pending_block(self) -> List[ResponseHexStr]:
         sent_transaction_hashes = self._add_all_to_pending_block(
             self._pending_transactions
         )
@@ -402,7 +404,9 @@ class EthereumTester:
         return sent_transaction_hashes
 
     @to_list
-    def _add_all_to_pending_block(self, pending_transactions):
+    def _add_all_to_pending_block(
+        self, pending_transactions: List[TransactionRequestObject]
+    ) -> List[ResponseHexStr]:
         for pending in pending_transactions:
             txn = extract_valid_transaction_params(pending)
             yield self._add_transaction_to_pending_block(
@@ -447,7 +451,9 @@ class EthereumTester:
         return self.backend.estimate_gas(transaction, block_number)
 
     # -- private transaction API -- #
-    def _add_transaction_to_pending_block(self, transaction: TransactionRequestObject):
+    def _add_transaction_to_pending_block(
+        self, transaction: TransactionRequestObject
+    ) -> ResponseHexStr:
         if isinstance(transaction, SignedTypedTransactionRequest):
             tx_hash = self.backend.send_signed_transaction(transaction)
         else:
@@ -485,13 +491,12 @@ class EthereumTester:
     #
     # Private filter API
     #
-    def _revert_block_filter(self, filter_):
+    def _revert_block_filter(self, filter_: Filter) -> None:
         is_valid_block_hash = excepts(
             (BlockNotFound,),
             compose(
                 bool,
                 self.get_block_by_hash,
-                # self.normalizer.normalize_outbound_block_hash,
             ),
             lambda v: False,
         )
@@ -572,7 +577,7 @@ class EthereumTester:
         return ResponseHexStr(raw_filter_id)
 
     @validate_call(validate_return=True)
-    def delete_filter(self, filter_id: RequestHexInteger):
+    def delete_filter(self, filter_id: RequestHexInteger) -> None:
         if filter_id in self._block_filters:
             del self._block_filters[filter_id]
         elif filter_id in self._pending_transaction_filters:

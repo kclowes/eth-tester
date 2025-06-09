@@ -39,7 +39,9 @@ class ResponseAccountAccess(RequestType):
     # validator = validate_account_access
 
     @classmethod
-    def serializer(cls, v: Tuple[bytes, Tuple[int]]) -> ...:
+    def serializer(
+        cls, v: Tuple[bytes, Tuple[int]]
+    ) -> Dict[str, Union[str, List[str]]]:
         return {
             "address": v[0].hex(),
             "storageKeys": [hex(k) for k in v[1]],
@@ -235,7 +237,8 @@ TransactionRPCResponse = Annotated[
     Union[
         Annotated[SerializedModel[LegacyTransactionResponse], Tag("legacy")],
         Annotated[
-            SerializedModel[SignedLegacyTransactionResponse], Tag("signed_legacy")
+            SerializedModel[SignedLegacyTransactionResponse],
+            Tag("signed_legacy"),
         ],
         Annotated[SerializedModel[AccessListTransactionResponse], Tag("access_list")],
         Annotated[
@@ -251,7 +254,8 @@ TransactionRPCResponse = Annotated[
         Annotated[SerializedModel[SignedBlobTransactionResponse], Tag("signed_blob")],
         Annotated[SerializedModel[SetCodeTransactionResponse], Tag("set_code")],
         Annotated[
-            SerializedModel[SignedSetCodeTransactionResponse], Tag("signed_set_code")
+            SerializedModel[SignedSetCodeTransactionResponse],
+            Tag("signed_set_code"),
         ],
     ],
     Discriminator(transaction_response_discriminator),
@@ -277,7 +281,7 @@ class TransactionReceiptResponse(ResponseModel):
     blob_gas_price: Optional["ResponseHexStr"] = None
     logs: List[Dict[str, Any]] = Field(default_factory=list)
     # logs_bloom: "ResponseHexStr"
-    status: Optional["ResponseHexStr"]
+    status: Optional["ResponseHexStr"] = None
     to: "ResponseHexStr"
     transaction_hash: "ResponseHexStr"
     transaction_index: "ResponseHexStr"

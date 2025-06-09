@@ -3,7 +3,18 @@ from queue import (
     Empty,
     Queue,
 )
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    List,
+    Tuple,
+)
 
+from eth_typing import (
+    AnyAddress,
+    HexStr,
+)
 from eth_utils import (
     is_address,
     is_bytes,
@@ -12,10 +23,16 @@ from eth_utils import (
     to_tuple,
 )
 
+from eth_tester.types.requests.blocks import (
+    RequestBlockIdentifier,
+)
+from eth_tester.types.requests.filters import (
+    RequestLogFilterParams,
+)
 from eth_tester.utils.casing import (
     dict_keys_to_lower_camel_case,
 )
-from eth_tester.types.requests.filters import RequestLogFilterParams
+
 
 class Filter:
     filter_params: RequestLogFilterParams = None
@@ -28,28 +45,28 @@ class Filter:
         self.filter_params = filter_params
         self.filter_fn = filter_fn
 
-        self.values = []
-        self.queue = Queue()
+        self.values: List[Any] = []
+        self.queue: Queue[Any] = Queue()
 
     @to_tuple
-    def get_changes(self):
+    def get_changes(self) -> Generator[Any, None, None]:
         while True:
             try:
                 yield self.queue.get_nowait()
             except Empty:
                 break
 
-    def get_all(self):
+    def get_all(self) -> Tuple[Any, ...]:
         return tuple(self.values)
 
-    def add(self, *values):
+    def add(self, *values: Any) -> None:
         for item in values:
             if self.filter_fn is not None and not self.filter_fn(item):
                 continue
             self.values.append(item)
             self.queue.put_nowait(item)
 
-    def remove(self, *values):
+    def remove(self, *values: Any) -> None:
         if not values:
             # Nothing to do below
             return
@@ -69,23 +86,23 @@ class Filter:
             self.queue.put_nowait(value)
 
 
-def is_tuple(value):
+def is_tuple(value: Any) -> bool:
     return isinstance(value, tuple)
 
 
-def is_topic_string(value):
+def is_topic_string(value: Any) -> bool:
     return is_bytes(value) and len(value) == 32
 
 
-def is_topic(value):
+def is_topic(value: Any) -> bool:
     return value is None or is_topic_string(value)
 
 
-def is_flat_topic_array(value):
+def is_flat_topic_array(value: Any) -> bool:
     return is_tuple(value) and all(is_topic(item) for item in value)
 
 
-def is_valid_with_nested_topic_array(value):
+def is_valid_with_nested_topic_array(value: Any) -> bool:
     return (
         bool(value)
         and is_tuple(value)
@@ -96,18 +113,20 @@ def is_valid_with_nested_topic_array(value):
     )
 
 
-def is_topic_array(value):
+def is_topic_array(value: Any) -> bool:
     return is_flat_topic_array(value) or is_valid_with_nested_topic_array(value)
 
 
-def check_single_topic_match(log_topic, filter_topic):
+def check_single_topic_match(log_topic: Any, filter_topic: Any) -> bool:
     if filter_topic is None:
         return True
     # python2 thinks string and bytes values can be equal.
     return filter_topic == log_topic and type(log_topic) is type(filter_topic)
 
 
-def check_if_from_block_match(block_number, _type, from_block):
+def check_if_from_block_match(
+    block_number: int, _type: str, from_block: RequestBlockIdentifier
+) -> bool:
     if from_block is None or from_block == "latest":
         return _type == "mined"
     elif from_block in {"earliest", "pending"}:
@@ -118,7 +137,9 @@ def check_if_from_block_match(block_number, _type, from_block):
         raise ValueError(f"Unrecognized from_block format: {from_block}")
 
 
-def check_if_to_block_match(block_number, _type, to_block):
+def check_if_to_block_match(
+    block_number: int, _type: str, to_block: RequestBlockIdentifier
+) -> bool:
     if to_block is None or to_block == "latest":
         return _type == "mined"
     elif to_block in {"earliest", "pending"}:
@@ -129,7 +150,9 @@ def check_if_to_block_match(block_number, _type, to_block):
         raise ValueError(f"Unrecognized to_block format: {to_block}")
 
 
-def check_if_log_matches_flat_topics(log_topics, filter_topics):
+def check_if_log_matches_flat_topics(
+    log_topics: List[HexStr], filter_topics: List[HexStr]
+) -> bool:
     if not filter_topics:
         return True
     elif len(log_topics) < len(filter_topics):
@@ -141,12 +164,16 @@ def check_if_log_matches_flat_topics(log_topics, filter_topics):
         )
 
 
-def extrapolate_flat_topic_from_topic_list(value):
+def extrapolate_flat_topic_from_topic_list(
+    value: List[HexStr],
+) -> Generator[Tuple[str, ...], None, None]:
     _value = tuple(item if is_tuple(item) else (item,) for item in value)
     return itertools.product(*_value)
 
 
-def check_if_topics_match(log_topics, filter_topics):
+def check_if_topics_match(
+    log_topics: List[HexStr], filter_topics: List[HexStr]
+) -> bool:
     if filter_topics is None:
         return True
     elif is_flat_topic_array(filter_topics):
@@ -162,7 +189,7 @@ def check_if_topics_match(log_topics, filter_topics):
         raise ValueError(f"Unrecognized topics format: {filter_topics}")
 
 
-def check_if_address_match(address, addresses):
+def check_if_address_match(address: AnyAddress, addresses: List[AnyAddress]) -> bool:
     if addresses is None:
         return True
     if is_tuple(addresses):
@@ -173,7 +200,13 @@ def check_if_address_match(address, addresses):
         raise ValueError(f"Unrecognized address format: {addresses}")
 
 
-def check_if_log_matches(log_entry, from_block, to_block, addresses, topics):
+def check_if_log_matches(
+    log_entry: Dict[str, Any],
+    from_block: RequestBlockIdentifier,
+    to_block: RequestBlockIdentifier,
+    addresses: List[HexStr],
+    topics: List[HexStr],
+) -> bool:
     log_entry = dict_keys_to_lower_camel_case(log_entry)
     if not check_if_from_block_match(
         log_entry["blockNumber"], log_entry["type"], from_block
