@@ -2,7 +2,9 @@ import functools
 import itertools
 import operator
 from typing import (
+    Generator,
     List,
+    Tuple,
 )
 
 from eth_utils import (
@@ -59,7 +61,7 @@ from eth_tester.types.responses.blocks import (
     BlockRPCResponse,
 )
 from eth_tester.types.responses.filters import (
-    ResponseFilterModel,
+    ResponseFilterRPCResponse,
 )
 from eth_tester.types.responses.transactions import (
     TransactionRPCResponse,
@@ -190,13 +192,17 @@ class EthereumTester:
 
     @validate_call(validate_return=True)
     def get_balance(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
+        self,
+        address: RequestHexStr,
+        block_number: RequestBlockIdentifier = "latest",
     ) -> ResponseHexStr:
         return self.backend.get_balance(address, block_number)
 
     @validate_call(validate_return=True)
     def get_code(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
+        self,
+        address: RequestHexStr,
+        block_number: RequestBlockIdentifier = "latest",
     ) -> ResponseHexStr:
         return self.backend.get_code(address, block_number)
 
@@ -211,7 +217,9 @@ class EthereumTester:
 
     @validate_call(validate_return=True)
     def get_nonce(
-        self, address: RequestHexStr, block_number: RequestBlockIdentifier = "latest"
+        self,
+        address: RequestHexStr,
+        block_number: RequestBlockIdentifier = "latest",
     ) -> ResponseHexStr:
         return self.backend.get_nonce(address, block_number)
 
@@ -229,7 +237,9 @@ class EthereumTester:
         int_type = int(_type, 16)
         if int_type >= 2:
             pending_transaction = assoc(
-                pending_transaction, "gasPrice", pending_transaction["maxFeePerGas"]
+                pending_transaction,
+                "gasPrice",
+                pending_transaction["maxFeePerGas"],
             )
         return pending_transaction
 
@@ -302,7 +312,9 @@ class EthereumTester:
 
     @validate_call(validate_return=True)
     def get_block_by_number(
-        self, block_number: RequestBlockIdentifier, full_transactions: bool = False
+        self,
+        block_number: RequestBlockIdentifier,
+        full_transactions: bool = False,
     ) -> BlockRPCResponse:
         return self.backend.get_block_by_number(block_number, full_transactions)
 
@@ -396,7 +408,9 @@ class EthereumTester:
             for log_entry in receipt["logs"]:
                 filter_.add(log_entry)
 
-    def _pop_pending_transactions_to_pending_block(self) -> List[ResponseHexStr]:
+    def _pop_pending_transactions_to_pending_block(
+        self,
+    ) -> List[ResponseHexStr]:
         sent_transaction_hashes = self._add_all_to_pending_block(
             self._pending_transactions
         )
@@ -589,7 +603,9 @@ class EthereumTester:
 
     @to_tuple
     @validate_call(validate_return=True)
-    def get_only_filter_changes(self, filter_id):
+    def get_only_filter_changes(
+        self, filter_id: RequestHexInteger
+    ) -> Tuple[ResponseFilterRPCResponse, ...]:
         if filter_id in self._block_filters:
             filter_ = self._block_filters[filter_id]
             # normalize_fn = self.normalizer.normalize_outbound_block_hash
@@ -608,7 +624,7 @@ class EthereumTester:
     @validate_call(validate_return=True)
     def get_all_filter_logs(
         self, filter_id: RequestHexInteger
-    ) -> List[ResponseFilterModel]:
+    ) -> Generator[ResponseFilterRPCResponse, None, None]:
         if filter_id in self._block_filters:
             filter_ = self._block_filters[filter_id]
             # normalize_fn = self.normalizer.normalize_outbound_block_hash
@@ -631,7 +647,7 @@ class EthereumTester:
         to_block: RequestBlockIdentifier = None,
         address: List[RequestHexBytes] = None,
         topics: List[RequestHexBytes] = None,
-    ) -> List[ResponseFilterModel]:
+    ) -> Generator[ResponseFilterRPCResponse, None, None]:
         # set up the filter object
         raw_filter_params = {
             "from_block": from_block,

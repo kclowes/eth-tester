@@ -13,12 +13,6 @@ from eth_tester.types.responses.base import (
 )
 
 
-class ResponseFilterId(ResponseModel):
-    """Response model for filter ids."""
-
-    filter_id: ResponseHexStr
-
-
 class ResponseFilterModel(ResponseModel):
     """Response model for filter logs."""
 
