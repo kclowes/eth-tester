@@ -571,9 +571,8 @@ class EthereumTester:
 
         return ResponseHexStr(raw_filter_id)
 
+    @validate_call(validate_return=True)
     def delete_filter(self, filter_id: RequestHexInteger):
-        self.validator.validate_inbound_filter_id(filter_id)
-
         if filter_id in self._block_filters:
             del self._block_filters[filter_id]
         elif filter_id in self._pending_transaction_filters:
@@ -584,6 +583,7 @@ class EthereumTester:
             raise FilterNotFound("Unknown filter id")
 
     @to_tuple
+    @validate_call(validate_return=True)
     def get_only_filter_changes(self, filter_id):
         if filter_id in self._block_filters:
             filter_ = self._block_filters[filter_id]
