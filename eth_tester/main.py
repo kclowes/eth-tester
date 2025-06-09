@@ -59,7 +59,6 @@ from eth_tester.types.responses.blocks import (
     BlockRPCResponse,
 )
 from eth_tester.types.responses.filters import (
-    ResponseFilterId,
     ResponseFilterModel,
 )
 from eth_tester.types.responses.transactions import (
@@ -534,7 +533,7 @@ class EthereumTester:
         return ResponseHexStr(filter_id)
 
     @validate_call(validate_return=True)
-    def create_pending_transaction_filter(self) -> ResponseFilterId:
+    def create_pending_transaction_filter(self) -> ResponseHexStr:
         filter_id = next(self._filter_counter)
         self._pending_transaction_filters[filter_id] = Filter(filter_params=None)
         return ResponseHexStr(filter_id)
