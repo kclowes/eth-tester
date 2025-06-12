@@ -320,7 +320,7 @@ class EthereumTester:
 
     @validate_call(validate_return=True)
     def get_block_by_hash(
-        self, block_hash: RequestHexBytes, full_transactions=False
+        self, block_hash: RequestHexBytes, full_transactions: bool = False
     ) -> BlockRPCResponse:
         return self.backend.get_block_by_hash(block_hash, full_transactions)
 

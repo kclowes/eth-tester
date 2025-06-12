@@ -43,6 +43,9 @@ from eth_tester.utils.address import (
 from eth_tester.utils.encoding import (
     int_to_32byte_big_endian,
 )
+from eth_tester.utils.transactions import (
+    extract_transaction_type,
+)
 
 
 def pad32(value):
@@ -269,6 +272,7 @@ def serialize_log(block, transaction, transaction_index, log, log_index, is_pend
         "address": log.address,
         "data": log.data,
         "topics": [int_to_32byte_big_endian(topic) for topic in log.topics],
+        "type": extract_transaction_type(transaction),
     }
 
 

@@ -28,3 +28,7 @@ class TransactionFailed(Exception):
 
 class BackendDistributionNotFound(Exception):
     pass
+
+
+class AccountLocked(Exception):
+    pass
