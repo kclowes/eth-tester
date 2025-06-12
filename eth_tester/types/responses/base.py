@@ -25,7 +25,7 @@ class ResponseModel(CamelModel):
     model_config.update(extra="forbid")
 
     def serialize(self) -> Dict[str, Any]:
-        serialized = self.model_dump(by_alias=True, exclude_none=True)
+        serialized = self.model_dump(by_alias=True)
 
         force_include = self._include_if_none or set()
         result: Dict[str, Any] = {}

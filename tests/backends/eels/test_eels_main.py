@@ -41,7 +41,7 @@ class TestEELSBackendBasics:
     def test_get_block_by_number(self):
         """Test retrieving a block by number."""
         # Get the genesis block
-        block = self.tester.get_block_by_number(0)
+        block = self.tester.get_block_by_number("0x0")
         assert block["number"] == 0
         assert "hash" in block
         assert "parentHash" in block

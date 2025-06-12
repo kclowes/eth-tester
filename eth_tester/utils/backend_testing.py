@@ -728,12 +728,12 @@ class BaseTestBackendDirect:
     # Blocks
     #
     def test_get_genesis_block_by_number(self, eth_tester):
-        block = eth_tester.get_block_by_number(0)
+        block = eth_tester.get_block_by_number("0x0")
         assert block["number"] == 0
         _validate_serialized_block(block)
 
     def test_get_genesis_block_by_hash(self, eth_tester):
-        genesis_hash = eth_tester.get_block_by_number(0)["hash"]
+        genesis_hash = eth_tester.get_block_by_number("0x0")["hash"]
         block = eth_tester.get_block_by_hash(genesis_hash)
         assert block["number"] == 0
         _validate_serialized_block(block)
@@ -743,7 +743,7 @@ class BaseTestBackendDirect:
         mined_block_hashes = eth_tester.include_blocks(10)
         for offset, block_hash in enumerate(mined_block_hashes):
             block_number = origin_block_number + offset
-            block = eth_tester.get_block_by_number(block_number)
+            block = eth_tester.get_block_by_number(hex(block_number))
             assert block["number"] == block_number
             assert block["hash"] == block_hash
             _validate_serialized_block(block)
@@ -754,7 +754,8 @@ class BaseTestBackendDirect:
             {
                 "from": eth_tester.get_accounts()[0],
                 "to": BURN_ADDRESS,
-                "gas": 21000,
+                "gas": hex(21000),
+                "gasPrice": hex(669921875),
             }
         )
         transaction = eth_tester.get_transaction_by_hash(transaction_hash)
@@ -770,13 +771,13 @@ class BaseTestBackendDirect:
             {
                 "from": eth_tester.get_accounts()[0],
                 "to": BURN_ADDRESS,
-                "gas": 21000,
+                "gas": hex(21000),
+                "gasPrice": hex(10000),
             }
         )
         transaction = eth_tester.get_transaction_by_hash(transaction_hash)
         block = eth_tester.get_block_by_number(
             transaction["blockNumber"],
-            full_transactions=False,
         )
         assert is_hex(block["transactions"][0])
 
