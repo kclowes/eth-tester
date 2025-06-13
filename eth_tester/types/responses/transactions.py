@@ -272,7 +272,7 @@ class TransactionReceiptResponse(ResponseModel):
 
     block_hash: "ResponseHexStr"
     block_number: "ResponseHexStr"
-    contract_address: Optional["ResponseHexStr"] = None
+    contract_address: "ResponseHexStr"
     cumulative_gas_used: "ResponseHexStr"
     sender: "ResponseHexStr" = Field(alias="from")
     gas_used: "ResponseHexStr"

@@ -181,7 +181,10 @@ class EthereumTester:
         raw_accounts = self.backend.get_accounts()
         return raw_accounts
 
-    def add_account(self, private_key, password=None):
+    @validate_call(validate_return=True)
+    def add_account(
+        self, private_key: RequestHexBytes, password: str = None
+    ) -> ResponseHexStr:
         account = private_key_to_address(private_key)
         if any(is_same_address(account, value) for value in self.get_accounts()):
             raise ValidationError("Account already present in account list")

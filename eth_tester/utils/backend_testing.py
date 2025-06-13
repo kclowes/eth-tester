@@ -17,6 +17,9 @@ from eth_utils.toolz import (
     dissoc,
     merge,
 )
+from pydantic_core._pydantic_core import (
+    ValidationError as PydanticValidationError,
+)
 import rlp
 
 from eth_tester.constants import (
@@ -175,7 +178,7 @@ class BaseTestBackendDirect:
             {
                 "from": eth_tester.get_accounts()[0],
                 "to": account,
-                "value": 1 * denoms.ether,
+                "value": hex(1 * denoms.ether),
                 "gas": DEFAULT_GAS,
                 "gasPrice": NON_DEFAULT_GAS_PRICE,
             }
@@ -195,7 +198,7 @@ class BaseTestBackendDirect:
             {
                 "from": eth_tester.get_accounts()[0],
                 "to": account,
-                "value": 1 * denoms.ether,
+                "value": hex(1 * denoms.ether),
                 "gas": DEFAULT_GAS,
                 "gasPrice": NON_DEFAULT_GAS_PRICE,
             }
@@ -458,9 +461,7 @@ class BaseTestBackendDirect:
             "maxFeePerGas": hex(1000000000),
             "maxPriorityFeePerGas": hex(1000000000),
         }
-        with pytest.raises(
-            ValidationError, match="legacy and dynamic fee transaction values"
-        ):
+        with pytest.raises(PydanticValidationError):
             self._send_and_check_transaction(eth_tester, test_transaction, accounts[0])
 
     def test_send_transaction_no_gas_price_or_dynamic_fees(self, eth_tester):
@@ -527,19 +528,19 @@ class BaseTestBackendDirect:
         assert accounts, "No accounts available for transaction sending"
 
         dynamic_fee_transaction = {
-            "chainId": 131277322940537,
+            "chainId": hex(131277322940537),
             "from": accounts[0],
             "to": accounts[0],
-            "value": 1,
-            "gas": 40000,
-            "maxFeePerGas": 2000000000,
-            "maxPriorityFeePerGas": 1000000000,
+            "value": hex(1),
+            "gas": hex(40000),
+            "maxFeePerGas": hex(2000000000),
+            "maxPriorityFeePerGas": hex(1000000000),
         }
         txn_hash = eth_tester.send_transaction(dynamic_fee_transaction)
         txn = eth_tester.get_transaction_by_hash(txn_hash)
 
         assert txn.get("type") == "0x2"
-        assert txn.get("accessList") == ()
+        assert txn.get("accessList") == []
         self._check_transactions(dynamic_fee_transaction, txn)
 
         # with non-empty access list
@@ -560,7 +561,7 @@ class BaseTestBackendDirect:
         txn = eth_tester.get_transaction_by_hash(txn_hash)
 
         assert txn.get("type") == "0x2"
-        assert txn.get("accessList") != ()
+        assert txn.get("accessList") != []
         self._check_transactions(dynamic_fee_transaction, txn)
 
     def test_block_number_auto_mine_transactions_enabled(self, eth_tester):
@@ -1798,8 +1799,9 @@ class BaseTestBackendDirect:
             tx = {
                 "from": eth_tester.get_accounts()[i],
                 "to": eth_tester.get_accounts()[i + 1],
-                "gas": (i + 1) * 20000 + 10000,
-                "value": 1,
+                "gas": hex((i + 1) * 20000 + 10000),
+                "value": hex(1),
+                "gasPrice": NON_DEFAULT_GAS_PRICE,
             }
             tx_hash = eth_tester.send_transaction(tx)
             tx_hashes.append(tx_hash)
@@ -1808,9 +1810,9 @@ class BaseTestBackendDirect:
         cumulative_gas_used = 0
         for tx_hash in tx_hashes:
             receipt = eth_tester.get_transaction_receipt(tx_hash)
-            cumulative_gas_used += receipt["gasUsed"]
-            assert receipt["gasUsed"] == 21000
-            assert receipt["cumulativeGasUsed"] == cumulative_gas_used
+            cumulative_gas_used += int(receipt["gasUsed"], 16)
+            assert receipt["gasUsed"] == hex(21000)
+            assert int(receipt["cumulativeGasUsed"], 16) == cumulative_gas_used
 
     #
     # Time Travel
@@ -1823,21 +1825,25 @@ class BaseTestBackendDirect:
         before_block = eth_tester.get_block_by_number("latest")
 
         # now travel forward 2 minutes
-        eth_tester.time_travel(before_block["timestamp"] + 120)
+        timestamp = int(before_block["timestamp"], 16)
+        eth_tester.time_travel(timestamp + 120)
 
         # grab the new block
         after_block = eth_tester.get_block_by_number("latest")
 
         # test a block has been mined with expected timestamp during travel
+        after_block_timestamp = int(after_block["timestamp"], 16)
         assert after_block["number"] == (before_block["number"] + 1)
-        assert before_block["timestamp"] + 120 == after_block["timestamp"]
+        assert timestamp + 120 == after_block_timestamp
 
     def test_time_traveling_backwards_not_allowed(self, eth_tester):
         # first mine a few blocks
         eth_tester.include_blocks(3)
 
         # check the time
-        before_timestamp = eth_tester.get_block_by_number("latest")["timestamp"]
+        before_timestamp = int(
+            eth_tester.get_block_by_number("latest")["timestamp"], 16
+        )
 
         # try to travel backwards 10 seconds
         with pytest.raises(ValidationError):
@@ -1857,7 +1863,7 @@ class BaseTestBackendDirect:
         txn = byzantium_eth_tester.get_transaction_receipt(txn_hash)
 
         assert "status" in txn
-        assert txn["status"] == 1
+        assert txn["status"] == "0x1"
 
     def test_duplicate_log_entries(self, eth_tester):
         self.skip_if_no_evm_execution()
