@@ -83,7 +83,7 @@ def calculate_effective_gas_price(transaction, block_header: "BlockHeaderRespons
     if transaction_type < DYNAMIC_FEE_TX_TYPE:
         return int(
             (
-                hex(transaction["gasPrice"])
+                transaction["gasPrice"]
                 if isinstance(transaction, dict)
                 else hex(transaction.gas_price)
             ),

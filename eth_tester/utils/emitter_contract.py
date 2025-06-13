@@ -245,8 +245,8 @@ def _deploy_emitter(eth_tester):
     deploy_hash = eth_tester.send_transaction(
         {
             "from": eth_tester.get_accounts()[0],
-            "gas": 500000,
-            "gasPrice": NON_DEFAULT_GAS_PRICE,
+            "gas": hex(500000),
+            "gasPrice": hex(NON_DEFAULT_GAS_PRICE),
             "data": EMITTER_BYTECODE,
         }
     )

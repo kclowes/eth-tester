@@ -2,9 +2,9 @@ import functools
 import itertools
 import operator
 from typing import (
+    Any,
     Generator,
     List,
-    Tuple,
 )
 
 from eth_utils import (
@@ -602,10 +602,8 @@ class EthereumTester:
             raise FilterNotFound("Unknown filter id")
 
     @to_tuple
-    @validate_call(validate_return=True)
-    def get_only_filter_changes(
-        self, filter_id: RequestHexInteger
-    ) -> Tuple[ResponseFilterRPCResponse, ...]:
+    @validate_call()
+    def get_only_filter_changes(self, filter_id: RequestHexInteger) -> Any:
         if filter_id in self._block_filters:
             filter_ = self._block_filters[filter_id]
             # normalize_fn = self.normalizer.normalize_outbound_block_hash
@@ -621,7 +619,7 @@ class EthereumTester:
         yield from filter_.get_changes()
 
     @to_tuple
-    @validate_call(validate_return=True)
+    @validate_call()
     def get_all_filter_logs(
         self, filter_id: RequestHexInteger
     ) -> Generator[ResponseFilterRPCResponse, None, None]:
@@ -640,7 +638,7 @@ class EthereumTester:
         yield from filter_.get_all()
 
     @to_tuple
-    @validate_call(validate_return=True)
+    @validate_call()
     def get_logs(
         self,
         from_block: RequestBlockIdentifier = None,

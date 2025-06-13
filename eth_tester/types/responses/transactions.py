@@ -123,7 +123,7 @@ class AccessListTransactionResponse(TypedTransactionResponse):
     """EIP-2930 access list transaction type."""
 
     access_list: List[ResponseAccountAccess] = Field(default_factory=list)
-    gas_price: "ResponseHexStr"
+    gas_price: Optional["ResponseHexStr"]
     type: "ResponseHexStr" = Field(default="0x1", frozen=True)
 
 

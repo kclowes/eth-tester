@@ -116,7 +116,7 @@ class AccessListTransactionRequest(TypedTransactionRequest):
     """EIP-2930 access list transaction type."""
 
     access_list: List[RequestAccountAccess]
-    gas_price: "RequestHexInteger"
+    gas_price: Optional["RequestHexInteger"]
     type: "RequestHexInteger" = Field(exclude=True, default="0x1", frozen=True)
 
 

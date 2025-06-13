@@ -46,7 +46,7 @@ class BlockHeaderResponse(ResponseModel):
 
     _include_if_none = {"number"}
 
-    number: int
+    number: int  # TODO - put back to ResponseHexStr
     hash: ResponseHexStr
     parent_hash: ResponseHexStr
     nonce: ResponseHexStr

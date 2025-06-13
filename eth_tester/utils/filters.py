@@ -22,12 +22,18 @@ from eth_utils import (
     is_same_address,
     to_tuple,
 )
+from pydantic import (
+    validate_call,
+)
 
 from eth_tester.types.requests.blocks import (
     RequestBlockIdentifier,
 )
 from eth_tester.types.requests.filters import (
     RequestLogFilterParams,
+)
+from eth_tester.types.responses.base import (
+    ResponseHexStr,
 )
 from eth_tester.utils.casing import (
     dict_keys_to_lower_camel_case,
@@ -49,14 +55,16 @@ class Filter:
         self.queue: Queue[Any] = Queue()
 
     @to_tuple
-    def get_changes(self) -> Generator[Any, None, None]:
+    @validate_call(validate_return=True)
+    def get_changes(self) -> Generator[ResponseHexStr, None, None]:
         while True:
             try:
                 yield self.queue.get_nowait()
             except Empty:
                 break
 
-    def get_all(self) -> Tuple[Any, ...]:
+    @validate_call(validate_return=True)
+    def get_all(self) -> Tuple[ResponseHexStr, ...]:
         return tuple(self.values)
 
     def add(self, *values: Any) -> None:
